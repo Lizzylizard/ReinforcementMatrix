@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 #import own scripts
-import Bot as bt
-import MyImage as mi
+import accel_bot as bt
+import accel_myImage as mi
 
 #import numpy
 import numpy as np
@@ -56,9 +56,17 @@ class Node:
         self.big = 22.6
         self.middle = 21.6
         self.small = 20.6
-        self.smallest = 20.0        
+        self.smallest = 20.0    
+
+        #saved initial velocities 
+        self.start_biggest = 25.0
+        self.start_big = 22.6
+        self.start_middle = 21.6
+        self.start_small = 20.6
+        self.start_smallest = 20.0
         
-        self.speed = (self.biggest + self.smallest) / 2.0
+        self.speed = self.biggest 
+        self.changed = 0
         self.distance = 0 
         
         #helper classes 
@@ -95,12 +103,15 @@ class Node:
         return vel
         
     #increase velocity 
-    def increase_velocity(self):
+    def increase_velocity(self, biggest, big, middle, small, smallest):
         self.biggest += 2
         self.big += 2
         self.middle += 2
         self.small += 2
         self.smallest += 2
+        
+        self.speed = self.biggest 
+        self.changed += 1
         
         vel_msg = Twist()
         self.vel_msg.linear.x += 2
@@ -115,16 +126,31 @@ class Node:
         return vel_msg
         
     #decrease velocity 
-    def decrease_velocity(self):
-        self.biggest -= 2
-        self.big -= 2
-        self.middle -= 2
-        self.small -= 2
-        self.smallest -= 2
+    def decrease_velocity(self, biggest, big, middle, small, smallest):
+        #do not get slower than 10
+        if(smallest > 9):
+            self.biggest -= 2
+            self.big -= 2
+            self.middle -= 2
+            self.small -= 2
+            self.smallest -= 2
+            
+            self.speed = self.biggest
+            self.changed += 1
+            
+            self.vel_msg.linear.x -= 2
+            self.vel_msg.linear.y -= 2
+        else:        
+            self.biggest = 10
+            self.big = 10
+            self.middle = 10
+            self.small = 10
+            self.smallest = 10
+            
+            self.vel_msg.linear.x -= 10
+            self.vel_msg.linear.y -= 10
         
         vel_msg = Twist()
-        self.vel_msg.linear.x -= 2
-        self.vel_msg.linear.y -= 2
         vel_msg.linear.x = self.vel_msg.linear.x   
         vel_msg.linear.y = self.vel_msg.linear.y
         vel_msg.linear.z = 0
@@ -225,6 +251,13 @@ class Node:
         
     #sets fields of Twist variable to stop robot and puts the robot back to starting position 
     def stop(self, biggest, big, middle, small, smallest):
+        #reset velocities 
+        self.biggest = self.start_biggest
+        self.big = self.start_big
+        self.middle = self.start_middle
+        self.small = self.start_small
+        self.smallest = self.start_smallest
+    
         self.episodes_counter += 1
         self.set_position()
         vel_msg = Twist()
@@ -326,39 +359,13 @@ class Node:
         print("Total time = " + str(total) + " seconds = " + str(minutes) + " minutes")
         print("Distance = " + str(self.distance) + " meters" + " (ca. " + str(self.speed) + " m/s)")
             
-    def main(self):        
+    def reinf_main(self):
+        bot = bt.Bot(self.speed)
         rospy.on_shutdown(self.shutdown) 
         
-        try:        
-            rate = rospy.Rate(50)
-            while not rospy.is_shutdown():            
-                if(self.flag): 
-                    #segmentation
-                    seg_img = self.imgHelper.segmentation(self.my_img)
-
-                    #choose steering direction
-                    self.curve = self.imgHelper.curve_one_row(seg_img)
-                    #curve = sd.complicated_curve_one_row(seg_img)
-                    #curve = sd.complicated_calc_curve(seg_img)
-                    print(self.curve)    
-                    
-                    #turn the curve-string into a valid message type
-                    self.vel_msg = self.translateToVel()
-                    
-                    #publish  
-                    self.velocity_publisher.publish(self.vel_msg) 
-                    
-                    #set flag back to false to wait for a new image
-                    self.flag = False 
-            
-            rate.sleep()
-        except rospy.ROSInterruptException:
-            pass
-            
-    def reinf_main(self):
-        self.start = time.time()
-        bot = bt.Bot()
-        rospy.on_shutdown(self.shutdown) 
+        #get the time when training is finished and robot starts using filled q-matrix 
+        driving_time = 0
+        flag_driving_time = False 
         
         #Hyperparameters
         episodes = 400
@@ -385,12 +392,16 @@ class Node:
                         
                         #fill q -matrix 
                         for j in range(sequence):
-                            self.curve = bot.q_learning(gamma, alpha, seg_img, explore)
+                            self.curve = bot.q_learning(gamma, alpha, seg_img, explore, self.speed)
                             #if(self.curve == "stop"):
                                 #break 
                     else:
+                        #time measurement for comparing algorithms 
+                        if not(flag_driving_time):
+                            self.start = time.time()
+                            flag_driving_time = True
                         #use q-matrix 
-                        self.curve = bot.use_q_matrix(seg_img)
+                        self.curve = bot.use_q_matrix(seg_img, self.speed)
                         
                         explanation = "Driving"
                     
@@ -406,7 +417,8 @@ class Node:
                     #set flag back to false to wait for a new image
                     self.flag = False 
             
-            bot.save_q_matrix(self.start, self.speed, self.distance)
+            average_speed = float(self.speed) / float(self.changed)
+            bot.save_q_matrix(self.start, average_speed, self.distance)
             rate.sleep()
         except rospy.ROSInterruptException:
             pass

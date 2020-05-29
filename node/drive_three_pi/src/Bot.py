@@ -171,30 +171,36 @@ class Bot:
         return curve
         
     #print q-matrix into a .txt-file 
-    def save_q_matrix(self, start):
+    def save_q_matrix(self, start, speed, distance):
         try:
             #open correct file 
             f = open("/home/elisabeth/catkin_ws/src/drive_three_pi/src/Q_Matrix/Q-Matrix-Records.txt", "a")
             #f = open("../Q_Matrix/Q-Matrix-Records.txt", "a")
             
             #pretty print matrix 
-            string = "\n\n["
+            end = time.time() 
+            readable_time = time.ctime(end)
+            string = "\n\n" + str(readable_time) + ")\n["
             for i in range(len(self.Q)):
-                string += "\n["
+                string += " ["
                 for j in range (len(self.Q[i])):
                     number = np.round(self.Q[i], 3)
                     string += " {:4.3f}, ".format(number[j])
-                string += "]"
+                string += "]\n"
             string += "]"
             
             #pretty print results
-            end = time.time() 
             total = end - start
             minutes = total / 60.0 
-            string += "\nSeconds = " 
+            string += "\nAverage speed = " 
+            string += str(speed)
+            string += "m/s\nSeconds = " 
             string += str(total)
             string += "\nMinutes = " 
-            string += str(minutes)
+            string += str(minutes)            
+            string += "\nDistance = " 
+            string += str(distance)
+            string += "m"
             
             #write into file 
             f.write(string)  
