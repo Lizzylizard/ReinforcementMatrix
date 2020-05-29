@@ -1,0 +1,5 @@
+Frequencies:
+/camera/image_raw: ca. 12 hz
+/camera/image_raw/compressed: ca. 12 hz 
+/camera/image_raw/theora: ca. 10 hz 
+/camera/rgb/camera_info: ca. 12 hz

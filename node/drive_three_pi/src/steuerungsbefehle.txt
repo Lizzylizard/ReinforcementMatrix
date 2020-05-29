@@ -1,0 +1,25 @@
+RECHTS
+rostopic pub /cmd_vel geometry_msgs/Twist -r 1 -- '[1.0, 1.2, 0.0]' '[0.0, 0.0, 0.0]'
+
+LINKS
+rostopic pub /cmd_vel geometry_msgs/Twist -r 1 -- '[1.2, 1.0, 0.0]' '[0.0, 0.0, 0.0]'
+
+STEHEN
+rostopic pub /cmd_vel geometry_msgs/Twist -r 1 -- '[0.0, 0.0, 0.0]' '[0.0, 0.0, 0.0]'
+
+GERADEAUS
+rostopic pub /cmd_vel geometry_msgs/Twist -r 1 -- '[1.0, 1.0, 0.0]' '[0.0, 0.0, 0.0]'
+
+RÜCKWÄRTS
+rostopic pub /cmd_vel geometry_msgs/Twist -r 1 -- '[-1.0, -1.0, 0.0]' '[0.0, 0.0, 0.0]'
+
+Linear: m/s		Angular: rad/s
+keine Beschränkung der Werte
+
+------------------------------------------------------------------------------------------
+
+RECHTS
+rostopic pub /cmd_vel geometry_msgs/Twist -r 1 -- '[1.0, 2.0, 0.0]' '[0.0, 0.0, 0.0]'
+
+LINKS
+rostopic pub /cmd_vel geometry_msgs/Twist -r 1 -- '[2.0, 1.0, 0.0]' '[0.0, 0.0, 0.0]'

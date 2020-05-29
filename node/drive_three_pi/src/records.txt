@@ -1,0 +1,179 @@
+################################################################
+Parameters:
+camera angle: rpy="0.0 ${pi/7} 0.0"
+image dimensions: 1x50
+function: curve = sd.curve_one_row(seg_img)
+
+'''
+Results:
+Total time = 55.7476429939 seconds = 0.929127383232 minutes
+Distance = 1254.32196736 meters (ca. 22.5 m/s)
+frequency   /camerea/image_raw: ca. 14 hz
+            /cmd_vel: ca. 14 hz
+
+biggest = 25.0 
+big = 22.6
+middle = 21.6
+small = 20.6
+smallest = 20.0
+'''
+
+'''
+Results:
+Total time = 47.5025458336 seconds = 0.791709097226 minutes
+Distance = 1306.32001042 meters (ca. 27.5 m/s)
+frequency   /camerea/image_raw: ca. 14 hz
+            /cmd_vel: ca. 14 hz
+			
+biggest = 30.0 
+big = 27.1
+middle = 25.9
+small = 24.7
+smallest = 24.0
+'''
+
+'''
+Results:
+Total time = 42.2337629795 seconds = 0.703896049658 minutes
+Distance = 1245.8960079 meters (ca. 29.5 m/s)
+
+biggest = 33.0 
+big = 29.6
+middle = 28.2
+small = 26.8
+smallest = 26.0
+'''
+
+'''
+Results:
+Total time = 41.8598649502 seconds = 0.697664415836 minutes
+Distance = 1255.79594851 meters (ca. 30.0 m/s)
+
+biggest = 33.5 
+big = 30.1
+middle = 28.7
+small = 27.3
+smallest = 26.5
+'''
+
+'''
+Results: RAUS
+
+biggest = 34.0 
+big = 30.6
+middle = 29.2
+small = 27.8
+smallest = 27.0
+'''
+
+################################################################
+Parameters:
+camera angle: rpy="0.0 ${pi/7} 0.0"
+image dimensions: 1x20
+function: curve = sd.curve_one_row(seg_img)
+
+'''
+Results:
+Total time = 137.323367119 seconds = 2.28872278531 minutes
+Distance = 1098.58693695 meters (ca. 8.0 m/s)
+frequency   /camerea/image_raw: ca. 14.5 hz
+            /cmd_vel: ca. 14.5 hz
+
+biggest = 10.0 
+big = 9.0
+middle = 8.0
+small = 7.0
+smallest = 6.0
+'''
+
+'''
+Results: RAUS 
+
+biggest = 12.0 
+big = 11.0
+middle = 10.0
+small = 9.0
+smallest = 8.0
+'''
+
+################################################################
+Parameters:
+camera angle: rpy="0.0 ${pi/7} 0.0"
+image dimensions: 640x480
+function: curve = sd.complicated_calc_curve(seg_img, curve)
+
+'''
+Results: RAUS 
+frequency   /camerea/image_raw: ca. 13.3 hz
+            /cmd_vel: ca. 12.6 hz
+
+biggest = 12.0 
+big = 11.0
+middle = 10.0
+small = 9.0
+smallest = 8.0
+'''
+
+################################################################
+Parameters:
+camera angle: rpy="0.0 ${pi/2} 0.0"
+image dimensions: 640x480
+function: curve = sd.complicated_calc_curve(seg_img, curve)
+
+'''
+Results: 
+Total time = 70.063313961 seconds = 1.16772189935 minutes
+Distance = 1261.1396513 meters (ca. 18.0 m/s)
+frequency   /camerea/image_raw: ca. 11.5 hz
+            /cmd_vel: ca. 11.4 hz
+
+biggest = 20.0
+big = 18.8
+middle = 18.0
+small = 17.2
+smallest = 16.0
+'''
+
+'''
+Results: RAUS 
+frequency   /camerea/image_raw: ca. 12.0 hz
+            /cmd_vel: ca. 11.6 hz
+
+biggest = 25.0
+big = 23.8
+middle = 23.0
+small = 22.2
+smallest = 21.0
+'''
+
+################################################################
+Parameters:
+camera angle: rpy="0.0 ${pi/7} 0.0"
+image dimensions: 1x50
+function: curve = sd.complicated_curve_one_row(seg_img)
+
+'''
+Results:
+Total time = 42.511079073 seconds = 0.708517984549 minutes
+Distance = 1294.46235777 meters (ca. 30.45 m/s)
+frequency   /camerea/image_raw: ca. 14.1 hz
+            /cmd_vel: ca. 13.7 hz
+
+biggest = 33.0 
+big = 31.0
+middle = 28.5
+small = 28.0
+smallest = 27.9
+'''
+
+'''
+Results: RAUS
+
+biggest = 33.5
+big = 31.5
+middle = 29.0
+small = 28.5
+smallest = 28.4
+'''
+
+--> sometimes the blue ones work, sometimes they don't 
