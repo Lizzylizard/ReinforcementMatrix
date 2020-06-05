@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 #import own scripts
-import Bot_2 as bt
-import MyImage_2 as mi
+import Bot_4 as bt
+import MyImage_4 as mi
 
 #import numpy
 import numpy as np
@@ -49,41 +49,20 @@ class Node:
         self.curve =  "start"  
         self.vel_msg = Twist()
         self.flag = False
-        self.start = time.time()
-
-        #status of lost line
-        self.lost_line = 28
-        #acion to stop
-        self.stop_action = 8
+        self.start = time.time() 
         
         #starting coordinates of the robot
         self.x_position, self.y_position, self.z_position = self.get_start_position()        
         #self.save_position()
         
-        #inital values 
-        self.inital_biggest = 25.0
-        self.initial_big = 22.6
-        self.initial_middle = 21.6
-        self.initial_small = 20.6
-        self.initial_smallest = 20.0        
-                
-        #define velocities
-        self.biggest = self.inital_biggest
-        self.big = self.initial_big
-        self.middle = self.initial_middle
-        self.small = self.initial_small
-        self.smallest = self.initial_smallest
-        
-        #define how fast /slow robot gets max!
-        self.max_speed = 40.0
-        self.min_speed = 20.0
+        #inital values
+        self.speed = 30.0
 
-        #define how fast speed changes if it changes
-        self.speed_change = self.biggest * (5.0/100.0)
-        
-        #keep track of current speed and save initial speed
-        self.all_speeds = [self.initial_middle]
-        
+        #deviation from speed so average speed stays the same
+        self.sharp = self.speed * (1.0/5.0)         #sharp curve => big difference
+        self.middle = self.speed * (1.0/7.5)        #middle curve => middle difference
+        self.slightly = self.speed * (1.0/10.0)     #slight curve => slight difference
+
         #helper classes 
         self.imgHelper = mi.MyImage()
         
@@ -95,8 +74,7 @@ class Node:
             4: "slightly right",
             5: "right",
             6: "sharp right",
-            7: "slower",
-            8: "stop"
+            7: "stop"
             }
         
         #publisher to publish on topic /cmd_vel 
@@ -106,180 +84,94 @@ class Node:
         rospy.init_node('reinf_matrix_driving', anonymous=True)  
         #subscribe to a topic using rospy.Subscriber class
         self.sub=rospy.Subscriber('/camera/image_raw', Image, self.cam_im_raw_callback) 
-        
-        
-    #sets fields of Twist variable so robot drives sharp left
-    def sharp_left(self, msg):
-        #get faster
-        vel_msg = Twist()
-        vel_msg = self.faster(msg)
 
-        '''
-        #return correct speed
-        #vel_msg = Twist()
-        vel_msg.linear.x = self.biggest
-        vel_msg.linear.y = self.small
+
+#sets fields of Twist variable so robot drives sharp left
+    def sharp_left(self):
+        vel_msg = Twist()
+        vel_msg.linear.x = self.speed + self.sharp
+        vel_msg.linear.y = self.speed - self.sharp
         vel_msg.linear.z = 0
         vel_msg.angular.x = 0
         vel_msg.angular.y = 0
         vel_msg.angular.z = 0
         #print("LEFT")
-        '''
         return vel_msg
 
-    # sets fields of Twist variable so robot drives slightly left
-    def slightly_left(self, msg):
-        #get faster
+    #sets fields of Twist variable so robot drives slightly left
+    def slightly_left(self):
         vel_msg = Twist()
-        vel_msg = self.faster(msg)
-
-        '''
-        #return correct speed
-        #vel_msg = Twist()
-        vel_msg.linear.x = self.biggest
-        vel_msg.linear.y = self.big
+        vel_msg.linear.x = self.speed + self.slightly
+        vel_msg.linear.y = self.speed - self.slightly
         vel_msg.linear.z = 0
         vel_msg.angular.x = 0
         vel_msg.angular.y = 0
         vel_msg.angular.z = 0
         #print("LEFT")
-        '''
         return vel_msg
         
     #sets fields of Twist variable so robot drives left
-    def left(self, msg):
-        # get faster
+    def left(self):
         vel_msg = Twist()
-        vel_msg = self.faster(msg)
-
-        '''
-        # return correct speed
-        #vel_msg = Twist()
-        vel_msg.linear.x = self.biggest
-        vel_msg.linear.y = self.middle
+        vel_msg.linear.x = self.speed + self.middle
+        vel_msg.linear.y = self.speed - self.middle
         vel_msg.linear.z = 0
         vel_msg.angular.x = 0
         vel_msg.angular.y = 0
         vel_msg.angular.z = 0
         #print("LEFT")
-        '''
         return vel_msg
         
     #sets fields of Twist variable so robot drives forward
-    def forward(self, msg):
-        #get faster
+    def forward(self):
         vel_msg = Twist()
-        vel_msg = self.faster(msg)
-
-        '''
-        #return correct speed
-        #vel_msg = Twist()
-        vel_msg.linear.x = self.biggest
-        vel_msg.linear.y = self.biggest
+        vel_msg.linear.x = self.speed
+        vel_msg.linear.y = self.speed
         vel_msg.linear.z = 0
         vel_msg.angular.x = 0
         vel_msg.angular.y = 0
         vel_msg.angular.z = 0
         #print("FORWARD")
-        '''
         return vel_msg
         
     #sets fields of Twist variable so robot drives slightly right
-    def slightly_right(self, msg):
-        # get faster
+    def slightly_right(self):
         vel_msg = Twist()
-        vel_msg = self.faster(msg)
-
-        '''
-        # return correct speed
-        #vel_msg = Twist()
-        vel_msg.linear.x = self.big
-        vel_msg.linear.y = self.biggest
+        vel_msg.linear.x = self.speed - self.slightly
+        vel_msg.linear.y = self.speed + self.slightly
         vel_msg.linear.z = 0
         vel_msg.angular.x = 0
         vel_msg.angular.y = 0
         vel_msg.angular.z = 0
         #print("RIGHT")
-        '''
         return vel_msg
         
     #sets fields of Twist variable so robot drives right
-    def right(self, msg):
-        # get faster
+    def right(self):
         vel_msg = Twist()
-        vel_msg = self.faster(msg)
-
-        '''
-        # return correct speed
-        #vel_msg = Twist()
-        vel_msg.linear.x = self.middle
-        vel_msg.linear.y = self.biggest
+        vel_msg.linear.x = self.speed - self.middle
+        vel_msg.linear.y = self.speed + self.middle
         vel_msg.linear.z = 0
         vel_msg.angular.x = 0
         vel_msg.angular.y = 0
         vel_msg.angular.z = 0
         #print("RIGHT")
-        '''
         return vel_msg
         
     #sets fields of Twist variable so robot drives sharp right
-    def sharp_right(self, msg):
-        # get faster
+    def sharp_right(self):
         vel_msg = Twist()
-        vel_msg = self.faster(msg)
-
-        '''
-        # return correct speed
-        #vel_msg = Twist()
-        vel_msg.linear.x = self.small
-        vel_msg.linear.y = self.biggest
+        vel_msg.linear.x = self.speed - self.sharp
+        vel_msg.linear.y = self.speed + self.sharp
         vel_msg.linear.z = 0
         vel_msg.angular.x = 0
         vel_msg.angular.y = 0
         vel_msg.angular.z = 0
         #print("RIGHT")
-        '''
         return vel_msg
-        
-    #makes robot drive proportionally faster 
-    def faster(self, msg):
-        print("Faster")
-        vel = self.change_speed(1, msg)
-        #print("Vel msg in faster() = " + str(vel))
-        return vel
-        
-    #makes robot drive proportionally slower 
-    def slower(self, msg):
-        print("Slower")
-        return self.change_speed(-1, msg)
     
-    #sign = +1 => robot gets faster 
-    #sign = -1 => robot gets slower 
-    def change_speed(self, sign, msg):
-        change_factor = (5.0/100.0)
-        if(msg.linear.x <= self.max_speed and msg.linear.x >= self.min_speed):
-            print("Im if!")
-            self.biggest += (self.biggest * sign * change_factor)
-            self.big += (self.big * sign * change_factor)
-            self.middle += (self.middle * sign * change_factor)
-            self.small += (self.small * sign * change_factor)
-            self.smallest += (self.smallest * sign * change_factor) 
-            
-            msg.linear.x += (msg.linear.x * sign * change_factor)
-            msg.linear.y += (msg.linear.y * sign * change_factor)
-            msg.linear.z = 0.0
-            msg.angular.x = 0.0
-            msg.angular.y = 0.0
-            msg.angular.z = 0.0
-        else:
-            pass
-
-        print("Vel msg in change_speed() = " + str(msg))
-        return msg
-
     #sets fields of Twist variable to stop robot and puts the robot back to starting position
-    #stop robot and set it back to a random starting position
-    def stop(self, msg):
+    def stop(self):
         #self.episodes_counter += 1
         self.choose_random_starting_position()
         self.set_position(self.x_position, self.y_position, self.z_position)
@@ -294,6 +186,8 @@ class Node:
         #print("RIGHT")
         return vel_msg
     
+
+    ########################################################################################### 
 
     ######################################### QUELLE ##########################################    
     '''
@@ -334,7 +228,7 @@ class Node:
     def save_position(self):
         try:
             #open correct file 
-            f = open("/home/elisabeth/catkin_ws/src/drive_three_pi/src/Q_Matrix/Code/Speed_4/position.txt", "a")
+            f = open("/home/elisabeth/catkin_ws/src/drive_three_pi/src/Q_Matrix/Code/Learn_Simple_3/position.txt", "a")
             #f = open("../Q_Matrix/Q-Matrix-Records.txt", "a")
             
             #pretty print matrix 
@@ -381,24 +275,22 @@ class Node:
     #if user pressed ctrl+c --> stop the robot
     def shutdown(self):
         print("Stopping")  
-        #publish
-        msg = Twist()
-        vel_msg = self.stop(msg)
-        self.velocity_publisher.publish(vel_msg)
+        #publish   
+        self.vel_msg = self.stop()
+        self.velocity_publisher.publish(self.vel_msg)
         
         end = time.time() 
         total = end - self.start
         minutes = total / 60.0 
-        speed = self.calc_average_speed()
+        speed = (self.biggest + self.smallest) / 2.0
         distance = speed * total 
         print("Total time = " + str(total) + " seconds = " + str(minutes) + " minutes")
         print("Distance = " + str(distance) + " meters" + " (ca. " + str(speed) + " m/s)")
-        print("Average speed was = " + str(speed))
                     
         #save q matrix and records for later 
         self.bot.save_q_matrix(self.start, speed, distance)
 
-
+    #does not do anything yet
     def reset_environment(self):
         #turn image to grayscale
         #self.my_img = self.imgHelper.segmentation(self.my_img)
@@ -411,14 +303,8 @@ class Node:
         self.z_position = -0.0301313744646
         self.set_position(self.x_position, self.y_position, self.z_position)
         '''
-        
-        #set speed back to initial values 
-        self.biggest = self.inital_biggest
-        self.big = self.initial_big
-        self.middle = self.initial_middle
-        self.small = self.initial_small
-        self.smallest = self.initial_smallest          
 
+    #decide whether to explore or to exploit
     def epsilon_greedy(self, e):
         #random number 
         exploration_rate_threshold = random.uniform(0, 1)
@@ -429,15 +315,16 @@ class Node:
         else:
             #exploit
             return False 
-    
-    def step(self, bot, action, last_state, msg):
+
+    #do the next step
+    def step(self, bot, action, last_state):
         #execute action 
-        vel =self.execute_action(action, msg)
+        self.execute_action(action)
         
         #get new state 
-        new_state = bot.get_state(self.my_img, self.all_speeds, self.max_speed, self.min_speed)
+        new_state = bot.get_state(self.my_img)
         done = False 
-        if(new_state == self.lost_line):
+        if(new_state == 7):
             #line is lost, episode has to end 
             #print("State is terminal")
             done = True 
@@ -445,9 +332,10 @@ class Node:
         #get reward 
         reward = bot.calculate_reward(last_state, action)
         
-        return new_state, reward, done, vel
-        
-    def execute_action(self, action, msg):
+        return new_state, reward, done 
+
+    #send the ROS message
+    def execute_action(self, action):
         #execute action
         vel = Twist()
         directions = {
@@ -458,35 +346,15 @@ class Node:
             4: self.slightly_right,
             5: self.right,
             6: self.sharp_right,
-            7: self.slower,
-            8: self.stop
+            7: self.stop
             }
         function = directions.get(action)
-        vel = function(msg)
-        #print("X speed = " + str(vel.linear.x))
-        #print("Y speed = " + str(vel.linear.y))
-        #self.vel_msg = vel
-        self.save_speed(msg)
+        vel = function()
+        
         #publish  
         self.velocity_publisher.publish(vel)
-
-        return vel
-    
-    #puts current speed in a list 
-    def save_speed(self, msg):
-        speed = (msg.linear.x + msg.linear.y) / 2.0
-        print("Current speed = " + str(speed))
-        self.all_speeds.append(speed)
         
-    #calculates average speed of the robot 
-    def calc_average_speed(self):
-        avg_speed = 0
-        for i in range(len(self.all_speeds)):
-            avg_speed += self.all_speeds[i]
-            
-        avg_speed = (avg_speed / float((len(self.all_speeds))))
-        return avg_speed 
-    
+    #main program
     def reinf_main(self):
         rospy.on_shutdown(self.shutdown)
         self.start = time.time()
@@ -503,18 +371,6 @@ class Node:
         max_exploration_rate = 1
         
         all_rewards = []
-
-        #check if robot is driving without learning for the first time
-        firsttime = True
-
-        #variable to save last driving message
-        last_msg = Twist()
-        last_msg.linear.x = self.middle
-        last_msg.linear.y = self.middle
-        last_msg.linear.z = 0.0
-        last_msg.angular.x = 0.0
-        last_msg.angular.y = 0.0
-        last_msg.angular.z = 0.0
         
         #start at random point 
         self.choose_random_starting_position()
@@ -542,7 +398,7 @@ class Node:
                         rewards_current_episode = 0                        
                                                 
                         #get current state 
-                        curr_state = self.bot.get_state(self.my_img, self.all_speeds, self.max_speed, self.min_speed)
+                        curr_state = self.bot.get_state(self.my_img)
                         #print("\nState = " + str(curr_state))
                     
                         for i in range(max_steps_per_episode):
@@ -560,7 +416,7 @@ class Node:
                                 action = self.bot.exploit(self.my_img, curr_state)
                                 
                             #take the action 
-                            new_state, reward, done, last_msg = self.step(self.bot, action, curr_state, last_msg)
+                            new_state, reward, done = self.step(self.bot, action, curr_state)
                             #print("done = " + str(done))
                             
                             #update q-table
@@ -577,7 +433,7 @@ class Node:
                             if done:  
                                 #print("Done!")
                                 #self.set_position(self.x_position, self.y_position, self.z_position)
-                                last_msg = self.execute_action(self.stop_action, last_msg) #stop robot and put it back to starting position
+                                self.execute_action(7) #stop robot and put it back to starting position 
                                 break
                             
                         #at the end of each episode 
@@ -593,14 +449,10 @@ class Node:
                     #end episode        
                     
                     else:
-                        #print("Driving")
-                        #drive with the filled q-matrix, but do NOT update its' values anymore
-                        if(firsttime):
-                            self.reset_environment()
-                            firsttime = False
-                        action = self.bot.drive(self.my_img, self.all_speeds, self.max_speed, self.min_speed)
-                        #print which action is taken
-                        print(self.action_strings.get(action))
+                        print("Driving")
+                    #drive with the filled q-matrix, but do NOT update its' values anymore
+                        self.reset_environment()
+                        action = self.bot.drive(self.my_img)
                         self.execute_action(action)
                         
                     #set flag back to false to wait for a new image
