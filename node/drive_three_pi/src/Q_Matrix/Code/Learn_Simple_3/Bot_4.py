@@ -32,34 +32,71 @@ class Bot:
         #action space
         self.actions = np.arange(7)
         '''
-        0 = sharp left, 1 = left, 2 = slightly left, 3 = forward, 4 = slightly right, 5 = right, 6 = sharp right 
+        0 = sharp left, 1 = left, 2 = slightly left, 3 = forward, 
+        4 = slightly right, 5 = right, 6 = sharp right, (not in array: 7 = stop)
         '''
+        self.stop_action = 7
         
         #state space 
         self.states = np.arange(8)
         '''
-        0 = line is far left, 1 = line is left, 2 = line is slightly left, 3 = line is in the middle, 4 = line is slightly right, 5 = line is right, 6 = line is far right, 7 = line is lost 
-        '''        
+        0 = line is far left, 1 = line is left, 2 = line is slightly left, 3 = line is in the middle, 
+        4 = line is slightly right, 5 = line is right, 6 = line is far right, 7 = line is lost 
+        '''
+        self.lost_line = 7
         
         #q-matrix (empty in the beginning)
         self.Q = np.zeros(shape=[len(self.states), len(self.actions)])
         
         #image helper 
         self.img_helper = mi.MyImage()
-    
-    #returns the reward for a taken action 
-    def calculate_reward(self, last_state, last_action):
+
+        # returns the reward for a taken action
+
+    def calculate_reward(self, curr_state, last_action):
+        # return value
+        reward = 0
+
+        if (curr_state == 3):
+            # best case: middle
+            reward = 10
+        elif (curr_state == 2):
+            # second best case: slightly left
+            reward = 0
+        elif (curr_state == 1):
+            # third best case: left
+            reward = 0
+        elif (curr_state == 0):
+            # fourth best case: far left
+            reward = 0
+        elif (curr_state == 4):
+            # second best case: slightly right
+            reward = 0
+        elif (curr_state == 5):
+            # third best case: right
+            reward = 0
+        elif (curr_state == 6):
+            # fourth best case: far right
+            reward = 0
+        else:
+            # worst case: line is lost
+            reward = (-100)
+
+        return reward
+
+        #returns the reward for a taken action
+    def calculate_reward_old(self, curr_state, last_action):
         #return value 
         reward = 0
         
-        if(last_state == 3):
-            #best case: middle 
+        if(curr_state == 3):
+            #best case: middle
             if(last_action == 3):
-            #best action is to move forward 
+            #best action is to move forward
                 reward = 10
             else:
                 reward = -10
-        elif(last_state == 2):
+        elif(curr_state == 2):
             #second best case: slightly left
             if(last_action == 1):
                 reward = 10
@@ -67,40 +104,40 @@ class Bot:
                 reward = 0
             else:
                 reward = -10
-        elif(last_state == 1):
-            #third best case: left  
+        elif(curr_state == 1):
+            #third best case: left
             if(last_action == 1):
                 reward = 10
             elif(last_action == 0 or last_action == 2):
                 reward = 0
             else:
                 reward = -10
-        elif(last_state == 0):
-            #fourth best case: far left  
+        elif(curr_state == 0):
+            #fourth best case: far left
             if(last_action == 0):
                 reward = 10
             elif(last_action == 1 or last_action == 2):
                 reward = 0
             else:
                 reward = -10
-        elif(last_state == 4):
-            #second best case: slightly right   
+        elif(curr_state == 4):
+            #second best case: slightly right
             if(last_action == 4):
                 reward = 10
             elif(last_action == 5 or last_action == 6):
                 reward = 0
             else:
                 reward = -10
-        elif(last_state == 5):
-            #third best case: right   
+        elif(curr_state == 5):
+            #third best case: right
             if(last_action == 5):
                 reward = 10
             elif(last_action == 4 or last_action == 6):
                 reward = 0
             else:
                 reward = -10
-        elif(last_state == 6):
-            #fourth best case: far right   
+        elif(curr_state == 6):
+            #fourth best case: far right
             if(last_action == 6):
                 reward = 10
             elif(last_action == 4 or last_action == 5):
@@ -114,7 +151,8 @@ class Bot:
         return reward 
     
     #check where the line is --> check current state of the bot 
-    def get_state(self, img):        
+
+    def get_state(self, img):
         line_state = self.img_helper.get_line_state(img)
         #for later: check speed here and update state
         return line_state 
@@ -132,18 +170,18 @@ class Bot:
         return action
         
     #fill q-matrix 
-    def update_q_table(self, state, action, alpha, reward, gamma, next_state):        
+    def update_q_table(self, curr_state, action, alpha, reward, gamma, next_state):
         #update q-matrix 
-        self.Q[state, action] = (1-alpha) * self.Q[state, action] + \
+        self.Q[curr_state, action] = (1-alpha) * self.Q[curr_state, action] + \
             alpha * (reward + gamma * np.max(self.Q[next_state, :]))
       
     #use filled q-matrix to simply drive 
     def drive(self, img):
         state = self.get_state(img)
         action = np.argmax(self.Q[state,:])
-        if(state == 7):
+        if(state == self.lost_line):
             #stop robot if line is lost
-            action = 7
+            action = self.stop_action
         return action 
         
     #print q-matrix into a .txt-file 

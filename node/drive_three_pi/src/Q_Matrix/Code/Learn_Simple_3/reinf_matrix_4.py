@@ -32,10 +32,16 @@ class Node:
     def cam_im_raw_callback(self, msg):     
         #rospy.loginfo(msg.header)  
 
+        print("Neues Bild")
         #convert ROS image to cv image, copy it and save it as a global numpy-array
-        img = self.imgHelper.img_conversion(msg) 
-        self.my_img = np.copy(img)    
-           
+        img = self.imgHelper.img_conversion(msg)
+        self.my_img = np.copy(img)
+
+        #check whether it's the first or second received image
+        if(self.flag):
+            print("Zweites Bild")
+            self.second_image = True
+
         #set flag to true, so main-loop knows, there's a new image to work with
         self.flag = True
         
@@ -49,19 +55,35 @@ class Node:
         self.curve =  "start"  
         self.vel_msg = Twist()
         self.flag = False
-        self.start = time.time() 
+        self.second_image = False
+        self.start = time.time()
+
+        #terminal states
+        self.lost_line = 7
+        self.stop_action = 7
         
         #starting coordinates of the robot
         self.x_position, self.y_position, self.z_position = self.get_start_position()        
         #self.save_position()
         
         #inital values
-        self.speed = 30.0
+        self.speed = 20.0
 
         #deviation from speed so average speed stays the same
-        self.sharp = self.speed * (1.0/5.0)         #sharp curve => big difference
-        self.middle = self.speed * (1.0/7.5)        #middle curve => middle difference
+        self.sharp = self.speed * (1.0/7.0)         #sharp curve => big difference
+        self.middle = self.speed * (1.0/8.5)        #middle curve => middle difference
         self.slightly = self.speed * (1.0/10.0)     #slight curve => slight difference
+
+        '''
+        Did work with 'old' reward function:
+        #inital values
+        self.speed = 20.0
+
+        #deviation from speed so average speed stays the same
+        self.sharp = self.speed * (1.0/7.0)         #sharp curve => big difference
+        self.middle = self.speed * (1.0/8.5)        #middle curve => middle difference
+        self.slightly = self.speed * (1.0/10.0)     #slight curve => slight difference
+        '''
 
         #helper classes 
         self.imgHelper = mi.MyImage()
@@ -173,8 +195,8 @@ class Node:
     #sets fields of Twist variable to stop robot and puts the robot back to starting position
     def stop(self):
         #self.episodes_counter += 1
-        self.choose_random_starting_position()
-        self.set_position(self.x_position, self.y_position, self.z_position)
+        #self.choose_random_starting_position()
+        #self.set_position(self.x_position, self.y_position, self.z_position)
         
         vel_msg = Twist()
         vel_msg.linear.x = 0.0       
@@ -282,27 +304,20 @@ class Node:
         end = time.time() 
         total = end - self.start
         minutes = total / 60.0 
-        speed = (self.biggest + self.smallest) / 2.0
+        speed = self.speed
         distance = speed * total 
         print("Total time = " + str(total) + " seconds = " + str(minutes) + " minutes")
-        print("Distance = " + str(distance) + " meters" + " (ca. " + str(speed) + " m/s)")
+        print("Distance = " + str(distance) + " meters")
+        print("Speed = " + str(speed) + " m/s)")
+
                     
         #save q matrix and records for later 
         self.bot.save_q_matrix(self.start, speed, distance)
 
     #does not do anything yet
     def reset_environment(self):
-        #turn image to grayscale
-        #self.my_img = self.imgHelper.segmentation(self.my_img)
-    
-        '''
-        #put robot back to starting point
+        self.choose_random_starting_position()
         self.set_position(self.x_position, self.y_position, self.z_position)
-        self.x_position = 0.997423683876
-        self.y_position = -5.77804235333
-        self.z_position = -0.0301313744646
-        self.set_position(self.x_position, self.y_position, self.z_position)
-        '''
 
     #decide whether to explore or to exploit
     def epsilon_greedy(self, e):
@@ -317,20 +332,29 @@ class Node:
             return False 
 
     #do the next step
-    def step(self, bot, action, last_state):
+
+    def step(self, bot, action, curr_state):
         #execute action 
         self.execute_action(action)
         
-        #get new state 
+        #wait for new image
+        self.second_image = False
+        while not(self.second_image):
+            continue
+
+        #stop robot to detect the new state
+        self.execute_action(self.stop_action)
+
+        #get new state
         new_state = bot.get_state(self.my_img)
         done = False 
-        if(new_state == 7):
+        if(new_state == self.lost_line):
             #line is lost, episode has to end 
             #print("State is terminal")
             done = True 
         
         #get reward 
-        reward = bot.calculate_reward(last_state, action)
+        reward = bot.calculate_reward(new_state, action)
         
         return new_state, reward, done 
 
@@ -350,7 +374,7 @@ class Node:
             }
         function = directions.get(action)
         vel = function()
-        
+        #print("Vel msg =\n" + str(vel))
         #publish  
         self.velocity_publisher.publish(vel)
         
@@ -359,7 +383,9 @@ class Node:
         rospy.on_shutdown(self.shutdown)
         self.start = time.time()
         
-        episodes = 2000
+        #episodes = 2000
+        #episodes = 500
+        episodes = 1000
         max_steps_per_episode = 100
         episode_counter = 0
         gamma = 0.95
@@ -377,88 +403,98 @@ class Node:
         self.set_position(self.x_position, self.y_position, self.z_position)
                 
         try:        
-            rate = rospy.Rate(50)
+            rate = rospy.Rate(10)
             while not rospy.is_shutdown():  
             #ROS main loop and outer reinforcement learning loop at the same time 
-                if(self.flag): 
-                #only do stuff if a new image is ready 
-                          
+                if(self.flag):
+                    #only do stuff if a new image is ready
+
                     if(episode_counter <= episodes):
-                    #start episode 
+                    #start episode
                     #do reinforcement learning if not all episodes done
-                    
-                        #at start of each new episode 
-                        #put robot back to starting position and set speed to initial values 
+                        print("Episode = " + str(episode_counter))
+
+                        #at start of each new episode
+                        #put robot back to starting position and set speed to initial values
                         self.reset_environment()
-                        
-                        #keep track of if episode is done 
-                        done = False 
-                        
-                        #no rewards at the beginning for the current episode  
-                        rewards_current_episode = 0                        
-                                                
-                        #get current state 
+
+                        #keep track of if episode is done
+                        done = False
+
+                        #no rewards at the beginning for the current episode
+                        rewards_current_episode = 0
+
+                        #get current state
                         curr_state = self.bot.get_state(self.my_img)
-                        #print("\nState = " + str(curr_state))
-                    
+
+
                         for i in range(max_steps_per_episode):
                         #try to reach goal (stay on line)
-                            
+
                             if(self.epsilon_greedy(e=exploration_rate)):
                             #explore
-                                print("Exploring")
-                                #do the actual learning 
+                                print("\nExploring")
+                                #do the actual learning
                                 action = self.bot.explore(self.my_img)
                             else:
-                            #exploit 
-                                print("Exploiting")
-                                #use q-matrix, but still update its' values 
+                            #exploit
+                                print("\nExploiting")
+                                #use q-matrix, but still update its' values
                                 action = self.bot.exploit(self.my_img, curr_state)
-                                
-                            #take the action 
+
+                            print("State = " + str(curr_state))
+                            print("Action: " + str(action))
+                            #take the action
                             new_state, reward, done = self.step(self.bot, action, curr_state)
+                            print("New State: " + str(new_state))
+                            print("Reward: " + str(reward))
                             #print("done = " + str(done))
-                            
+
                             #update q-table
                             self.bot.update_q_table(curr_state, action, alpha, reward, gamma, new_state)
-                            
-                            #transition to new step 
-                            curr_state = new_state 
-                            rewards_current_episode += reward 
-                            
+
+                            #transition to new step
+                            curr_state = new_state
+                            rewards_current_episode += reward
+
                             #print which action is taken
-                            #print(self.action_strings.get(action))
-                                                        
-                            #if terminal state (lost line) is reached, get out of for loop 
-                            if done:  
+                            print(self.action_strings.get(action) + "\n\n")
+
+                            #if terminal state (lost line) is reached, get out of for loop
+                            if done:
                                 #print("Done!")
                                 #self.set_position(self.x_position, self.y_position, self.z_position)
-                                self.execute_action(7) #stop robot and put it back to starting position 
+                                self.execute_action(self.stop_action) #stop robot and put it back to starting position
                                 break
-                            
-                        #at the end of each episode 
-                        #decay the exploration rate 
+
+                        #at the end of each episode
+                        #decay the exploration rate
                         # Exploration rate decay
                         exploration_rate = min_exploration_rate + \
-                            (max_exploration_rate - min_exploration_rate) * np.exp(-decay_rate*episode_counter)   
-                        #increase episode counter 
-                        episode_counter += 1   
-                        
-                        #add rewards to list 
+                            (max_exploration_rate - min_exploration_rate) * np.exp(-decay_rate*episode_counter)
+                        #increase episode counter
+                        episode_counter += 1
+
+                        #add rewards to list
                         all_rewards.append(rewards_current_episode)
-                    #end episode        
-                    
+                    #end episode
+
                     else:
                         print("Driving")
                     #drive with the filled q-matrix, but do NOT update its' values anymore
-                        self.reset_environment()
+                        #self.reset_environment()
                         action = self.bot.drive(self.my_img)
+                        #print which action is taken
+                        print(self.action_strings.get(action))
                         self.execute_action(action)
+                        if(action == self.stop_action):
+                            self.reset_environment()
+
+                        #set flag back to false to wait for a new image
+                        self.flag = False
                         
-                    #set flag back to false to wait for a new image
-                    self.flag = False 
-                        
-            rate.sleep()
+                rate.sleep()
+                #print("While over")
             
         except rospy.ROSInterruptException:
             pass
