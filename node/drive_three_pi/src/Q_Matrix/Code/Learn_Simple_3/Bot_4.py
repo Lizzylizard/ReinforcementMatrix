@@ -59,25 +59,25 @@ class Bot:
 
         if (curr_state == 3):
             # best case: middle
-            reward = 10
+            reward = 50
         elif (curr_state == 2):
             # second best case: slightly left
-            reward = 0
+            reward = 30
         elif (curr_state == 1):
             # third best case: left
-            reward = 0
+            reward = 20
         elif (curr_state == 0):
             # fourth best case: far left
-            reward = 0
+            reward = 10
         elif (curr_state == 4):
             # second best case: slightly right
-            reward = 0
+            reward = 30
         elif (curr_state == 5):
             # third best case: right
-            reward = 0
+            reward = 20
         elif (curr_state == 6):
             # fourth best case: far right
-            reward = 0
+            reward = 10
         else:
             # worst case: line is lost
             reward = (-100)

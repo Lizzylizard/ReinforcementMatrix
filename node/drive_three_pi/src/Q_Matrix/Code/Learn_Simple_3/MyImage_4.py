@@ -98,7 +98,7 @@ class MyImage:
             #just define that if line is ALMOST lost, it is completely lost,
             #so terminal state gets reached 
             state = 7        
-        elif(left > (width * (1.0/100.0)) and left <= (width * (10.0/100.0))):
+        elif(left > (width * (0.0/100.0)) and left <= (width * (10.0/100.0))):
             #line is far left 
             state = 0
         elif(left > (width * (10.0/100.0)) and left <= (width * (25.0/100.0))):
@@ -110,18 +110,31 @@ class MyImage:
         elif(left > (width * (48.0/100.0)) and left <= (width * (52.0/100.0))):
             #line is in the middle 
             state = 3
-        elif(left > (width * (52.0/100.0)) and left < (width * (75.0/100.0))):
+        elif(left > (width * (52.0/100.0)) and left <= (width * (75.0/100.0))):
             #line is slightly right 
             state = 4        
-        elif(left > (width * (75.0/100.0)) and left < (width * (90.0/100.0))):
+        elif(left > (width * (75.0/100.0)) and left <= (width * (90.0/100.0))):
             #line is right 
             state = 5
         elif(left > (width * (90.0/100.0)) and left < (width * (99.0/100.0))):
             #line is far right 
             state = 6
+
         else:
-            #line is lost
-            #in case anything was missed 
-            state = 7
-            
+            #left edge of line is out of the image (left = 0)
+            if(right >= width * (52.00/100.0) and right < width * (75.00/100.0)):
+                #line is slightly left
+                state = 2
+            if(right >= width * (75.00/100.0) and right < width * (90.0/100.0)):
+                #line is left
+                state = 1
+            elif(right >= width * (90.0/100.0) and right < width * (99.0/100.0)):
+                #line is far left
+                state = 0
+            else:
+                #line is lost
+                print("HIER NICHT REIN")
+                state = 7
+        print("Left: " + str(left))
+        print("Right = " + str(right))
         return state 

@@ -32,14 +32,14 @@ class Node:
     def cam_im_raw_callback(self, msg):     
         #rospy.loginfo(msg.header)  
 
-        print("Neues Bild")
+        #print("Neues Bild")
         #convert ROS image to cv image, copy it and save it as a global numpy-array
         img = self.imgHelper.img_conversion(msg)
         self.my_img = np.copy(img)
 
         #check whether it's the first or second received image
         if(self.flag):
-            print("Zweites Bild")
+            #print("Zweites Bild")
             self.second_image = True
 
         #set flag to true, so main-loop knows, there's a new image to work with
@@ -197,7 +197,8 @@ class Node:
         #self.episodes_counter += 1
         #self.choose_random_starting_position()
         #self.set_position(self.x_position, self.y_position, self.z_position)
-        
+
+        print("Stop")
         vel_msg = Twist()
         vel_msg.linear.x = 0.0       
         vel_msg.linear.y = 0.0
@@ -318,6 +319,8 @@ class Node:
     def reset_environment(self):
         self.choose_random_starting_position()
         self.set_position(self.x_position, self.y_position, self.z_position)
+        print(self.x_position, self.y_position)
+        time.sleep(0.25)
 
     #decide whether to explore or to exploit
     def epsilon_greedy(self, e):
@@ -336,15 +339,16 @@ class Node:
     def step(self, bot, action, curr_state):
         #execute action 
         self.execute_action(action)
-        
+        print(self.my_img)
         #wait for new image
         self.second_image = False
+        time.sleep(1.0/13.0)
         while not(self.second_image):
             continue
 
         #stop robot to detect the new state
-        self.execute_action(self.stop_action)
-
+        #self.execute_action(self.stop_action)
+        print(self.my_img)
         #get new state
         new_state = bot.get_state(self.my_img)
         done = False 
@@ -384,8 +388,8 @@ class Node:
         self.start = time.time()
         
         #episodes = 2000
-        #episodes = 500
-        episodes = 1000
+        episodes = 500
+        #episodes = 1000
         max_steps_per_episode = 100
         episode_counter = 0
         gamma = 0.95
@@ -408,6 +412,7 @@ class Node:
             #ROS main loop and outer reinforcement learning loop at the same time 
                 if(self.flag):
                     #only do stuff if a new image is ready
+                    print(self.my_img)
 
                     if(episode_counter <= episodes):
                     #start episode
@@ -490,9 +495,10 @@ class Node:
                         if(action == self.stop_action):
                             self.reset_environment()
 
-                        #set flag back to false to wait for a new image
-                        self.flag = False
-                        
+                    #set flag back to false to wait for a new image
+                    self.flag = False
+
+
                 rate.sleep()
                 #print("While over")
             
