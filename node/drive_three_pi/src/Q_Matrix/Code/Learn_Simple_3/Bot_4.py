@@ -59,28 +59,28 @@ class Bot:
 
         if (curr_state == 3):
             # best case: middle
-            reward = 50
+            reward = 10
         elif (curr_state == 2):
             # second best case: slightly left
-            reward = 30
+            reward = -1
         elif (curr_state == 1):
             # third best case: left
-            reward = 20
+            reward = -2
         elif (curr_state == 0):
             # fourth best case: far left
-            reward = 10
+            reward = -3
         elif (curr_state == 4):
             # second best case: slightly right
-            reward = 30
+            reward = -1
         elif (curr_state == 5):
             # third best case: right
-            reward = 20
+            reward = -2
         elif (curr_state == 6):
             # fourth best case: far right
-            reward = 10
+            reward = -3
         else:
             # worst case: line is lost
-            reward = (-100)
+            reward = (-50)
 
         return reward
 
@@ -174,6 +174,7 @@ class Bot:
         #update q-matrix 
         self.Q[curr_state, action] = (1-alpha) * self.Q[curr_state, action] + \
             alpha * (reward + gamma * np.max(self.Q[next_state, :]))
+        self.printMatrix(self.Q)
       
     #use filled q-matrix to simply drive 
     def drive(self, img):
@@ -184,7 +185,7 @@ class Bot:
             action = self.stop_action
         return action 
         
-    #print q-matrix into a .txt-file 
+    #save q-matrix as a .txt-file
     def save_q_matrix(self, start, speed, distance):
         try:
             #open correct file 
@@ -223,3 +224,38 @@ class Bot:
             f.close() 
         except Exception as e:
             print(str(e) + "\nFile not written")
+
+    # pretty print matrix
+    def printMatrix(self, M):
+        string = "Current matrix = \n"
+        for i in range(len(self.Q)):
+            for j in range(len(self.Q[i])):
+                row_max = np.argmax(self.Q[i, :])
+                if(j == row_max):
+                    number = np.round(self.Q[i], 3)
+                    string += " *{:04.3f}*, ".format(number[j])
+
+                else:
+                    number = np.round(self.Q[i], 3)
+                    string += " {:04.3f}, ".format(number[j])
+            string += "\n"
+        print(string + "\n")
+
+    #use pre defined q matrix to drive, to see whether driving works or not
+    def own_q_matrix(self, img):
+        q = np.zeros(shape = [len(self.states), len(self.actions)])
+        q[0] = [1, 0, 0, 0, 0, 0, 0]    #line = far left, action = sharp left
+        q[1] = [0, 1, 0, 0, 0, 0, 0]    #line = left, action = left
+        q[2] = [0, 0, 1, 0, 0, 0, 0]    #line = slightly left, action = slightly left
+        q[3] = [0, 0, 0, 1, 0, 0, 0]    #line = middle, action = forward
+        q[4] = [0, 0, 0, 0, 1, 0, 0]    #line = slightly right, action = slightly right
+        q[5] = [0, 0, 0, 0, 0, 1, 0]    #line = right, action = right
+        q[6] = [0, 0, 0, 0, 0, 0, 1]    #line = far right, action = sharp right
+        q[7] = [0, 0, 0, 0, 0, 0, 0]    #line = lost, action = stop
+
+        state = self.get_state(img)
+        action = np.argmax(q[state, :])
+        if(state == self.lost_line):
+            action = self.stop_action
+        return action
+

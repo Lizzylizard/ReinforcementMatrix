@@ -84,7 +84,7 @@ class MyImage:
                 
         return result
         
-    def get_line_state(self, img):
+    def get_line_state_old(self, img):
         left = self.count_pxl(img)
         reversed_img = np.flip(img, 1)
         right = self.count_pxl(reversed_img)
@@ -137,4 +137,75 @@ class MyImage:
                 state = 7
         print("Left: " + str(left))
         print("Right = " + str(right))
-        return state 
+        return state
+
+
+    def get_line_state(self, img):
+        left = self.count_pxl(img)
+        reversed_img = np.flip(img, 1)
+        right = self.count_pxl(reversed_img)
+
+        width = np.size(img[0])
+
+        # print("Pixel number left = " + str(left))
+
+        if (left >= (width * (99.0 / 100.0)) or right >= (width * (99.0 / 100.0))):
+            # line is lost
+            # just define that if line is ALMOST lost, it is completely lost,
+            # so terminal state gets reached
+            state = 7
+        elif (left >= (width * (0.0 / 100.0)) and left <= (width * (15.0 / 100.0))):
+            # line is far left
+            state = 0
+        elif (left > (width * (15.0 / 100.0)) and left <= (width * (30.0 / 100.0))):
+            # line is left
+            state = 1
+        elif (left > (width * (30.0 / 100.0)) and left <= (width * (45.0 / 100.0))):
+            # line is slightly left
+            state = 2
+        elif (left > (width * (45.0 / 100.0)) and left <= (width * (55.0 / 100.0))):
+            # line is in the middle
+            state = 3
+        elif (left > (width * (55.0 / 100.0)) and left <= (width * (70.0 / 100.0))):
+            # line is slightly right
+            state = 4
+        elif (left > (width * (70.0 / 100.0)) and left <= (width * (85.0 / 100.0))):
+            # line is right
+            state = 5
+        elif (left > (width * (85.0 / 100.0)) and left < (width * (99.0 / 100.0))):
+            # line is far right
+            state = 6
+        else:
+            '''
+            # left edge of line is out of the image (left = 0)
+            if (right >= width * (52.00 / 100.0) and right < width * (75.00 / 100.0)):
+                # line is slightly left
+                state = 2
+            if (right >= width * (75.00 / 100.0) and right < width * (90.0 / 100.0)):
+                # line is left
+                state = 1
+            elif (right >= width * (90.0 / 100.0) and right < width * (99.0 / 100.0)):
+                # line is far left
+                state = 0
+            else:
+            '''
+            # line is lost
+            state = 7
+
+        states_to_words = {
+            0: "far left",
+            1: "left",
+            2: "slightly left",
+            3: "middle",
+            4: "slightly right",
+            5: "right",
+            6: "far right",
+            7: "lost"
+        }
+
+        print("Left: " + str(left))
+        print("Right:" + str(right))
+        print("Line state is: " + states_to_words.get(state))
+
+        return state
+
