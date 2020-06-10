@@ -42,7 +42,7 @@ class Node:
 
         # count the received images
         self.img_cnt += 1
-        print("Image counter = " + str(self.img_cnt))
+        #print("Image counter = " + str(self.img_cnt))
 
     # constructor
     def __init__(self):
@@ -68,7 +68,7 @@ class Node:
         # self.save_position()
 
         # inital values
-        self.speed = 20.0
+        self.speed = 10.0
 
         # deviation from speed so average speed stays the same
         self.sharp = self.speed * (1.0 / 8.5)  # sharp curve => big difference
@@ -370,33 +370,23 @@ class Node:
         # publish
         self.velocity_publisher.publish(vel)
 
-        print("Action: " + str(action))
-        print("Robot drives: " + self.action_strings.get(action))
-
     # execute the given action, calculate reward and check if terminal state or not
     def step(self, bot, action, curr_state):
-        print("State = " + str(curr_state))
         # execute action
         self.execute_action(action)
 
+        print("Image counter before: " + str(self.img_cnt))
         # wait for the next few images to pass
         # (to actually see a difference)
-        #self.img_cnt = 0
         curr_number_img = self.img_cnt
-        #print(self.img_cnt <= curr_number_img)
-        print("Image counter before while = " + str(self.img_cnt))
         while (self.img_cnt <= curr_number_img + 1):
-            #print("Image counter While: " + str(self.img_cnt))
-            continue
-        # stop robot to detect the new state
-        # self.execute_action(self.stop_action)
+            i = 1
+        print("Image counter after: " + str(self.img_cnt))
 
-        print("Image counter after while = " + str(self.img_cnt))
-
-        print("Image after = ")
-        print(self.my_img)
+        #next image to work with
+        res_img = np.copy(self.my_img)
         # get new state
-        new_state = bot.get_state(self.my_img)
+        new_state, left2, right2, next_line_state = bot.get_state(res_img)
         done = False
         if (new_state == self.lost_line):
             # line is lost, episode has to end
@@ -406,7 +396,40 @@ class Node:
             # get reward
         reward = bot.calculate_reward(new_state, action)
 
-        return new_state, reward, done
+        return new_state, reward, done, res_img, left2, right2, next_line_state, res_img
+
+    #prints for debugging
+    def print_stats(self, episode, step, image1, left1, right1, curr_state_nr, curr_state_words, \
+                    action_nr, action_words, image2, left2, right2, next_state_nr, next_state_words, \
+                    reward, matrix):
+        img1 = ""
+        img2 = ""
+        for j in range(len(image1)):
+            if(image1[j] == 0):
+                img1 += "- "
+            else:
+                img1 += "* "
+        for j in range(len(image2)):
+            if(image2[j] == 0):
+                img2 += "- "
+            else:
+                img2 += "* "
+        print("Episode:\t" + str(episode) + "\tStep:\t" + str(step))
+        print("Image 1:")
+        #print(image1)
+        print(img1)
+        print("Left:\t" + str(left1) + "\tRight:\t" + str(right1))
+        print("Current line state:\t" + str(curr_state_nr) + " = " + str(curr_state_words))
+        print("Action:\t" + str(action_nr) + " = " + str(action_words))
+        print("Image 2:")
+        print(img2)
+        #print(image2)
+        print("Left:\t" + str(left2) + "\tRight:\t" + str(right2))
+        print("Next line state:\t" + str(next_state_nr) + " = " + str(next_state_words))
+        print("Reward:\t" + str(reward))
+        print("Matrix:")
+        print(matrix)
+
 
     # main program
     def reinf_main(self):
@@ -457,8 +480,6 @@ class Node:
                 # ROS main loop and outer reinforcement learning loop at the same time
                 if (self.img_cnt > 0):
                     # only do stuff if a new image is ready
-                    # print("Current image = ")
-                    # print(self.my_img)
 
                     if (episode_counter <= episodes):
                         # start episode
@@ -475,42 +496,50 @@ class Node:
                         rewards_current_episode = 0
 
                         # get current state
-                        curr_state = self.bot.get_state(self.my_img)
+                        curr_img = np.copy(self.my_img)
+                        curr_state, left1, right1, curr_line_state1 = self.bot.get_state(curr_img)
 
                         for i in range(max_steps_per_episode):
                             # try to reach goal (stay on line)
-                            print("Episode = " + str(episode_counter))
-                            print("Step = " + str(i))
-
-                            # print current image
-                            print("Image before = ")
-                            print(self.my_img)
-                            self.bot.get_state(self.my_img)
 
                             if (self.epsilon_greedy(e=exploration_rate)):
                                 # explore
                                 print("Exploring")
                                 # do the actual learning
-                                action = self.bot.explore(self.my_img)
+                                action = self.bot.explore(curr_img)
                             else:
                                 # exploit
                                 print("Exploiting")
                                 # use q-matrix, but still update its' values
-                                action = self.bot.exploit(self.my_img, curr_state)
+                                action = self.bot.exploit(curr_img, curr_state)
 
                             # take the action
-                            new_state, reward, done = self.step(self.bot, action, curr_state)
-
-                            # debugging prints
-                            print("New State: " + str(new_state))
-                            print("Reward: " + str(reward))
-                            # print("done = " + str(done))
+                            new_state, reward, done, res_img, left2, right2, next_line_state, next_img \
+                                = self.step(self.bot, action, curr_state)
 
                             # update q-table
                             self.bot.update_q_table(curr_state, action, alpha, reward, gamma, new_state)
 
+                            #print for debugging
+                            '''
+                            def print_stats(self, episode, step, 
+                            image1, left1, right1, curr_state_nr, 
+                            curr_state_words, action_nr, action_words, 
+                            image2, left2, right2, next_state_nr, 
+                            next_state_words, reward, matrix):
+                            '''
+                            curr_matrix = self.bot.get_matrix()
+                            self.print_stats(episode_counter, i, curr_img[0], left1, right1, curr_state, \
+                                             curr_line_state1, action, self.action_strings.get(action), \
+                                             res_img[0], left2, right2, new_state, next_line_state, reward, \
+                                             curr_matrix)
+
                             # transition to new step
                             curr_state = new_state
+                            left1 = left2
+                            right1 = right2
+                            curr_line_state1 = next_line_state
+                            curr_img = np.copy(next_img)
                             rewards_current_episode += reward
 
                             # if terminal state (lost line) is reached, get out of for loop

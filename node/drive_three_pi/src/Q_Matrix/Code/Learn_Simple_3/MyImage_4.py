@@ -28,6 +28,9 @@ class MyImage:
     def __init__(self):        
         # Initialize the CvBridge class
         self.bridge = CvBridge()
+        self.left = 0
+        self.right = 0
+        self.state_str = ""
         
     # Try to convert the ROS Image message to a cv Image
     #returns already segmented image (black and white)
@@ -144,6 +147,8 @@ class MyImage:
         left = self.count_pxl(img)
         reversed_img = np.flip(img, 1)
         right = self.count_pxl(reversed_img)
+        self.left = left
+        self.right = right
 
         width = np.size(img[0])
 
@@ -203,9 +208,14 @@ class MyImage:
             7: "lost"
         }
 
-        print("Left: " + str(left))
-        print("Right:" + str(right))
-        print("Line state is: " + states_to_words.get(state))
+        self.state_str = states_to_words.get(state)
+        #print("Image Left: " + str(left))
+        #print("Image Right:" + str(right))
+        #print("Image Line state is: " + states_to_words.get(state))
 
         return state
 
+    #return current statistics
+    def get_stats(self):
+        #print("In Image:" + self.state_str)
+        return self.left, self.right, self.state_str
