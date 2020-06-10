@@ -379,14 +379,14 @@ class Node:
         # wait for the next few images to pass
         # (to actually see a difference)
         curr_number_img = self.img_cnt
-        while (self.img_cnt <= curr_number_img + 1):
+        while (self.img_cnt <= curr_number_img + 3):
             i = 1
         print("Image counter after: " + str(self.img_cnt))
 
         #next image to work with
         res_img = np.copy(self.my_img)
         # get new state
-        new_state, left2, right2, next_line_state = bot.get_state(res_img)
+        new_state, left2, right2, next_line_state, middle = bot.get_state(res_img)
         done = False
         if (new_state == self.lost_line):
             # line is lost, episode has to end
@@ -396,11 +396,11 @@ class Node:
             # get reward
         reward = bot.calculate_reward(new_state, action)
 
-        return new_state, reward, done, res_img, left2, right2, next_line_state, res_img
+        return new_state, reward, done, res_img, left2, right2, next_line_state, middle
 
     #prints for debugging
-    def print_stats(self, episode, step, image1, left1, right1, curr_state_nr, curr_state_words, \
-                    action_nr, action_words, image2, left2, right2, next_state_nr, next_state_words, \
+    def print_stats(self, episode, step, image1, left1, right1, middle1, curr_state_nr, curr_state_words, \
+                    action_nr, action_words, image2, left2, right2, middle2, next_state_nr, next_state_words, \
                     reward, matrix):
         img1 = ""
         img2 = ""
@@ -418,13 +418,13 @@ class Node:
         print("Image 1:")
         #print(image1)
         print(img1)
-        print("Left:\t" + str(left1) + "\tRight:\t" + str(right1))
+        print("Left:\t" + str(left1) + "\tRight:\t" + str(right1) + "\tMiddle:\t" + str(middle1))
         print("Current line state:\t" + str(curr_state_nr) + " = " + str(curr_state_words))
         print("Action:\t" + str(action_nr) + " = " + str(action_words))
         print("Image 2:")
         print(img2)
         #print(image2)
-        print("Left:\t" + str(left2) + "\tRight:\t" + str(right2))
+        print("Left:\t" + str(left2) + "\tRight:\t" + str(right2) + "\tMiddle:\t" + str(middle2))
         print("Next line state:\t" + str(next_state_nr) + " = " + str(next_state_words))
         print("Reward:\t" + str(reward))
         print("Matrix:")
@@ -437,9 +437,9 @@ class Node:
         self.start = time.time()
 
         # episodes = 2000
-        episodes = 500
+        episodes = 10
         # episodes = 1000
-        max_steps_per_episode = 100
+        max_steps_per_episode = 5
         episode_counter = 0
         gamma = 0.95
         alpha = 0.8
@@ -497,8 +497,7 @@ class Node:
 
                         # get current state
                         curr_img = np.copy(self.my_img)
-                        curr_state, left1, right1, curr_line_state1 = self.bot.get_state(curr_img)
-
+                        curr_state, left1, right1, curr_line_state1, middle1 = self.bot.get_state(curr_img)
                         for i in range(max_steps_per_episode):
                             # try to reach goal (stay on line)
 
@@ -514,7 +513,7 @@ class Node:
                                 action = self.bot.exploit(curr_img, curr_state)
 
                             # take the action
-                            new_state, reward, done, res_img, left2, right2, next_line_state, next_img \
+                            new_state, reward, done, res_img, left2, right2, next_line_state, middle2 \
                                 = self.step(self.bot, action, curr_state)
 
                             # update q-table
@@ -523,23 +522,25 @@ class Node:
                             #print for debugging
                             '''
                             def print_stats(self, episode, step, 
-                            image1, left1, right1, curr_state_nr, 
-                            curr_state_words, action_nr, action_words, 
-                            image2, left2, right2, next_state_nr, 
+                            image1, left1, right1, middle1, 
+                            curr_state_nr, curr_state_words, 
+                            action_nr, action_words, image2, 
+                            left2, right2, middle2, next_state_nr, 
                             next_state_words, reward, matrix):
                             '''
                             curr_matrix = self.bot.get_matrix()
-                            self.print_stats(episode_counter, i, curr_img[0], left1, right1, curr_state, \
+                            self.print_stats(episode_counter, i, curr_img[0], left1, right1, middle1, curr_state, \
                                              curr_line_state1, action, self.action_strings.get(action), \
-                                             res_img[0], left2, right2, new_state, next_line_state, reward, \
+                                             res_img[0], left2, right2, middle2, new_state, next_line_state, reward, \
                                              curr_matrix)
 
                             # transition to new step
                             curr_state = new_state
                             left1 = left2
                             right1 = right2
+                            middle1 = middle2
                             curr_line_state1 = next_line_state
-                            curr_img = np.copy(next_img)
+                            curr_img = np.copy(res_img)
                             rewards_current_episode += reward
 
                             # if terminal state (lost line) is reached, get out of for loop

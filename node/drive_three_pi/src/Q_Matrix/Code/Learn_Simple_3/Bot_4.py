@@ -155,9 +155,9 @@ class Bot:
 
     def get_state(self, img):
         line_state = self.img_helper.get_line_state(img)
-        left, right, line_state_str = self.img_helper.get_stats()
+        left, right, line_state_str, middle = self.img_helper.get_stats()
         #for later: check speed here and update state
-        return line_state, left, right, line_state_str
+        return line_state, left, right, line_state_str, middle
         
     #explore by chosing a random action
 
@@ -182,7 +182,7 @@ class Bot:
     #use filled q-matrix to simply drive 
     def drive(self, img):
         state = self.get_state(img)
-        action = np.argmax(self.Q[state,:])
+        action = np.argmax(self.Q[state[0],:])
         if(state == self.lost_line):
             #stop robot if line is lost
             action = self.stop_action
@@ -257,7 +257,7 @@ class Bot:
         q[7] = [0, 0, 0, 0, 0, 0, 0]    #line = lost, action = stop
 
         state = self.get_state(img)
-        action = np.argmax(q[state, :])
+        action = np.argmax(q[state[0], :])
         if(state == self.lost_line):
             action = self.stop_action
         return action
@@ -270,7 +270,7 @@ class Bot:
                 row_max = np.argmax(self.Q[i, :])
                 if (j == row_max):
                     number = np.round(self.Q[i], 3)
-                    string += " *{:04.3f}*, ".format(number[j])
+                    string += " **{:04.3f}, ".format(number[j])
 
                 else:
                     number = np.round(self.Q[i], 3)
