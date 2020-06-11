@@ -17,6 +17,7 @@ find_package(gazebo REQUIRED)
 
 #ADDED
 add_message_files(
+  DIRECTORY /home/gepperth/research/programming/catkin_ws/src/ReinforcementMatrix/my_msgs/msg
   FILES
   VelJoint.msg
 )
