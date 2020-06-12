@@ -49,6 +49,7 @@ class Node:
       while(imgCountSave == self.img_cnt):
         pass ;
       return self.my_img ;
+    
 
     # constructor
     def __init__(self):
@@ -69,7 +70,7 @@ class Node:
         self.cnt_all_img = 0
 
         # terminal states
-        self.lost_line = 6 ;
+        self.lost_line = 5 ;
         self.terminalStates = [self.lost_line]
 
         # starting coordinates of the robot
@@ -88,7 +89,7 @@ class Node:
         # helper classes
         self.imgHelper = mi.MyImage() ;
         self.actions = [0,1,2,3,4,5,6] ;
-        self.sensoryStates = [0,1,2,3,4,5,self.lost_line] ;
+        self.sensoryStates = [0,1,2,3,4,self.lost_line] ;
         self.expl = [""]
         self.actionMethods = [self.sharp_left, self.left, self.slightly_left,
           self.forward, self.slightly_right, self.right, self.sharp_right] ;
@@ -341,7 +342,21 @@ class Node:
       self.lastSensoryState = self.sensoryState ;
 
     def computeSensoryState(self, img):
-      return 0 ;
+      print("img size", img.shape) ;
+      line = img[0,:,:].mean(axis=2).astype("int32") ; # convert3gray
+      firstBlack = np.where(line < 20) ;
+      diff2Middle = img.shape[1]/2 - firstBlack ;
+                           
+      diff2Middle = diff2Middle // 10 ;
+      if diff2Middle < -2 or diff2Middle > 2:
+        return self.lost_line ;
+      return diff2Middle + 2 ;
+                           
+    def computeReward(self, img):
+      if self.sensoryState == self.lost_line:
+        return -1000 ;
+      return -math.abs(self.sensoryState -2) ;
+                                 
 
     # Bellman equation
     def updateQ(self):
