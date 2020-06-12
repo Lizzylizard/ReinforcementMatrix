@@ -45,15 +45,16 @@ class Node:
         #print("Image counter = " + str(self.img_cnt))
 
     def receiveImage(self):
-      imgCountSave = self.image_cnt ;
+      imgCountSave = self.img_cnt ;
       while(imgCountSave == self.img_cnt):
         pass ;
+      print ("got img", self.img_cnt)
       return self.my_img ;
 
     # constructor
     def __init__(self):
         # helper classes
-        self.bot = bt.Bot()
+        #self.bot = bt.Bot()
 
         self.sensoryState = -1 ;
         self.motorState = -1 ;
@@ -92,7 +93,7 @@ class Node:
         self.expl = [""]
         self.actionMethods = [self.sharp_left, self.left, self.slightly_left,
           self.forward, self.slightly_right, self.right, self.sharp_right] ;
-        self.directions = { action : proc for action,proc in zip(self.actions, self.actionMethods ) ;
+        self.directions = { action : proc for action,proc in zip(self.actions, self.actionMethods) } ;
 
         self.nrActions = len(self.actions)
         self.nrSensoryStates = len(self.actions)
@@ -294,7 +295,7 @@ class Node:
         print("Speed = " + str(speed) + " m/s)")
 
         # save q matrix and records for later
-        self.bot.save_q_matrix(self.start, speed, distance)
+        #self.bot.save_q_matrix(self.start, speed, distance)
 
     # puts robot back to starting position
     def reset_environment(self):
@@ -325,7 +326,7 @@ class Node:
       return self.actions[index] ;
 
     # send the ROS message. Action is an int with the action code 0-7
-    def setMotorState(self, action: int):
+    def setMotorState(self, action):
       # execute action
       vel = self.directions.get(action)() ;
       self.motorState = action ;
@@ -353,7 +354,7 @@ class Node:
       return self.Q[:,self.sensoryState].argmax() ;
 
     def isTerminalState(self):
-      return self.sensoryState in self.terminalStates:
+      return self.sensoryState in self.terminalStates ;
 
 
     # main program
@@ -383,7 +384,7 @@ class Node:
         while not rospy.is_shutdown():
           img = self.receiveImage() ;
           self.saveLastSensoryState() ;
-          self.sensoryState = computeSensoryState(img) ;
+          self.sensoryState = self.computeSensoryState(img) ;
           curReward = self.computeReward(img);
 
           # update Q matrix with sensory/motor state from last loop
