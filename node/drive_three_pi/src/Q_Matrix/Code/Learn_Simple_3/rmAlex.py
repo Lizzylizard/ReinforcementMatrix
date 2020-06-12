@@ -31,7 +31,7 @@ import random
 class Node:
     # callback; copies the received image into a global numpy-array
     def cam_im_raw_callback(self, msg):
-        # print("Neues Bild")
+        print("Neues Bild", self.img_cnt)
 
         # convert ROS image to cv image, copy it and save it as a global numpy-array
         img = self.imgHelper.img_conversion(msg)
@@ -50,7 +50,7 @@ class Node:
         pass ;
       print ("got img", self.img_cnt)
       return self.my_img ;
-    
+
 
     # constructor
     def __init__(self):
@@ -322,8 +322,9 @@ class Node:
     def inExplorationMode(self):
       return self.explorationMode ;
 
-    def randomAction(self):
-      index = random.randint(0,len(self.actions)) ;
+    def getRandomAction(self):
+      index = random.randint(0,len(self.actions)-1) ;
+      print(index,"INDEX");
       return self.actions[index] ;
 
     # send the ROS message. Action is an int with the action code 0-7
@@ -335,7 +336,7 @@ class Node:
       # publish
       self.velocity_publisher.publish(vel)
 
-    def stopRobot():
+    def stopRobot(self):
       vel = self.stop() ;
       self.velocity_publisher.publish(vel)
 
@@ -343,21 +344,28 @@ class Node:
       self.lastSensoryState = self.sensoryState ;
 
     def computeSensoryState(self, img):
-      print("img size", img.shape) ;
-      line = img[0,:,:].mean(axis=2).astype("int32") ; # convert3gray
-      firstBlack = np.where(line < 20) ;
-      diff2Middle = img.shape[1]/2 - firstBlack ;
-                           
-      diff2Middle = diff2Middle // 10 ;
-      if diff2Middle < -2 or diff2Middle > 2:
+      #print("img size", img.shape) ;
+      line = img[0,:].astype("int32") ; # convert3gray
+      lineMask = line > 100 ;
+      lineIndices = np.where(lineMask)[0]
+      if len(lineIndices) > 0:
+        leftBorder = lineIndices[0] ;
+        #print(leftBorder, "leftB")
+        diff2Middle = img.shape[1]/2 - leftBorder ;
+        #print(diff2Middle)
+
+        diff2Middle = diff2Middle // 10 ;
+        if diff2Middle < -2 or diff2Middle > 2:
+          return self.lost_line ;
+        return diff2Middle + 2 ;
+      else:
         return self.lost_line ;
-      return diff2Middle + 2 ;
-                           
+
     def computeReward(self, img):
       if self.sensoryState == self.lost_line:
         return -1000 ;
-      return -math.abs(self.sensoryState -2) ;
-                                 
+      return -math.fabs(self.sensoryState -2) ;
+
 
     # Bellman equation
     def updateQ(self, reward):
@@ -378,10 +386,10 @@ class Node:
       self.start = time.time()
 
       episode_counter = 0
-      gamma = 0.95
-      alpha = 0.8
+      self.gamma = 0.95
+      self.alpha = 0.8
 
-      self.exploreProb= 0.99 ;
+      self.explorationProb= 0.99 ;
       self.explorationMode = False ;
       decay_rate = 0.001
       min_exploration_rate = 0.01
@@ -395,12 +403,14 @@ class Node:
       self.lastSensoryState = -1000 ;
 
       try:
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(20)
         while not rospy.is_shutdown():
           img = self.receiveImage() ;
           self.saveLastSensoryState() ;
           self.sensoryState = self.computeSensoryState(img) ;
           curReward = self.computeReward(img);
+          print("SensState",self.sensoryState) ;
+          print("MotorState",self.motorState) ;
 
           # update Q matrix with sensory/motor state from last loop
           if self.inExplorationMode() == True:
@@ -409,19 +419,22 @@ class Node:
           # if terminal state (lost line) is reached, get out of for loop
           # stop robot and put it back to starting position
           if self.isTerminalState():
+            print ("NEW EPISODE!", episode_counter+1);
             self.stopRobot() ;
             self.reset_environment()
             episode_counter += 1
             continue ;
 
           if self.exploration():
-            action = self.randomAction() ;
+            action = self.getRandomAction() ;
             self.setMotorState(action) ;
           else:
             action = self.getBestAction() ;
             self.setMotorState(action) ;
+          print("new motor state =", self.motorState)
+          print("-"*30)
           # ------------------
-          rate.sleep()
+          #rate.sleep()
 
       except rospy.ROSInterruptException:
           pass
