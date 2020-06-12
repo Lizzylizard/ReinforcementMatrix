@@ -359,9 +359,9 @@ class Node:
                                  
 
     # Bellman equation
-    def updateQ(self):
+    def updateQ(self, reward):
       self.Q[self.motorState, self.lastSensoryState] *= (1.-self.alpha) ;
-      update = self.gamma * self.Q[:,self.sensoryState].max() ;
+      update = reward + self.gamma * self.Q[:,self.sensoryState].max() ;
       self.Q[self.motorState, self.lastSensoryState] += self.alpha * update ;
 
     def getBestAction(self):
@@ -403,7 +403,7 @@ class Node:
 
           # update Q matrix with sensory/motor state from last loop
           if self.inExplorationMode() == True:
-            self.updateQ() ;
+            self.updateQ(curReward) ;
 
           # if terminal state (lost line) is reached, get out of for loop
           # stop robot and put it back to starting position
