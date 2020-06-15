@@ -82,7 +82,7 @@ class Node:
         # self.save_position()
 
         # inital values
-        self.speed = 15.0
+        self.speed = 10.0
 
         # deviation from speed so average speed stays the same
         self.sharp = self.speed * (1.0 / 8.5)  # sharp curve => big difference
@@ -285,7 +285,7 @@ class Node:
     def save_position(self):
         try:
             # open correct file
-            f = open("/home/elisabeth/catkin_ws/src/drive_three_pi/src/Q_Matrix/Code/Learn_Simple_3/position.txt", "a")
+            f = open("/home/elisabeth/catkin_ws/src/rl_matrix/src/Q_Matrix/Code/Learn_Simple_3/position.txt", "a")
             # f = open("../Q_Matrix/Q-Matrix-Records.txt", "a")
 
             # pretty print matrix
@@ -408,7 +408,7 @@ class Node:
         self.start = time.time()
 
         # episodes = 2000
-        max_episodes = 500
+        max_episodes = 1000
         self.explorationMode = False
         episode_counter = 0
         gamma = 0.95
@@ -449,7 +449,8 @@ class Node:
                         self.reset_environment()
                         episode_counter += 1
                         print("NEW EPISODE: ", episode_counter)
-                        print("-" * 60)
+                        self.bot.printMatrix()
+                        print("-" * 100)
                         continue
 
                     if(self.epsilon_greedy(exploration_prob)):
@@ -465,7 +466,7 @@ class Node:
                         self.execute_action(action)
                         self.curr_action = action
 
-                    print("-" * 60)
+                    print("-" * 100)
 
                 else:
                     print("Driving!")

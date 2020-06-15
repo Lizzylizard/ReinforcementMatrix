@@ -80,7 +80,7 @@ class Bot:
             reward = -3
         else:
             # worst case: line is lost
-            reward = (-100)
+            reward = (-1000)
 
         return reward
 
@@ -192,38 +192,11 @@ class Bot:
     def save_q_matrix(self, start, speed, distance):
         try:
             #open correct file 
-            f = open("/home/elisabeth/catkin_ws/src/drive_three_pi/src/Q_Matrix/Code/Learn_Simple_3/Q-Matrix-Records.txt", "a")
+            f = open("/home/elisabeth/catkin_ws/src/rl_matrix/src/Q_Matrix/Code/Learn_Simple_3/Q-Matrix-Records.txt", "a")
             #f = open("../Q_Matrix/Q-Matrix-Records.txt", "a")
             
             #pretty print matrix 
-            end = time.time() 
-            readable_time = time.ctime(end)
-            string = "\n\n" + str(readable_time) + ")\n["
-            string += "\nICH\n"
-            for i in range(len(self.Q)):
-                string += " ["
-                row_max = np.argmax(self.Q[i, :])
-                number = np.round(self.Q[i], 3)
-                for j in range (len(self.Q[i])):
-                    if(j == row_max):
-                        string += " **{:04.3f}**, ".format(number[j])
-                    else:
-                        string += "  {:04.3f}  , ".format(number[j])
-                string += "]\n"
-            string += "]"
-            
-            #pretty print results
-            total = end - start
-            minutes = total / 60.0 
-            string += "\nAverage speed = " 
-            string += str(speed)
-            string += "m/s\nSeconds = " 
-            string += str(total)
-            string += "\nMinutes = " 
-            string += str(minutes)            
-            string += "\nDistance = " 
-            string += str(distance)
-            string += "m"
+            string = self.printMatrix()
             
             #write into file 
             f.write(string)  
@@ -234,20 +207,24 @@ class Bot:
             print(str(e) + "\nFile not written")
 
     # pretty print matrix
-    def printMatrix(self, M):
-        string = "Current matrix = \n"
+    def printMatrix(self):
+        end = time.time()
+        readable_time = time.ctime(end)
+        string = "\n\nICH\n"
+        string += (str(readable_time) + ")\n[")
         for i in range(len(self.Q)):
+            string += " ["
+            row_max = np.argmax(self.Q[i, :])
+            number = np.round(self.Q[i], 3)
             for j in range(len(self.Q[i])):
-                row_max = np.argmax(self.Q[i, :])
-                if(j == row_max):
-                    number = np.round(self.Q[i], 3)
+                if (j == row_max):
                     string += " **{:04.3f}**, ".format(number[j])
-
                 else:
-                    number = np.round(self.Q[i], 3)
-                    string += " {:04.3f}, ".format(number[j])
-            string += "\n"
+                    string += "  {:04.3f}  , ".format(number[j])
+            string += "]\n"
+        string += "]"
         print(string + "\n")
+        return string
 
     #use pre defined q matrix to drive, to see whether driving works or not
     def own_q_matrix(self, img):

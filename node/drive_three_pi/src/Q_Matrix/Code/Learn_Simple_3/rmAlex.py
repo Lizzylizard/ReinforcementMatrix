@@ -296,48 +296,41 @@ class Node:
         print("Speed = " + str(speed) + " m/s)")
 
         # save q matrix and records for later
-        self.save_q_matrix(self.start, speed, distance)
+        self.save_q_matrix()
+
+    #pretty print matrix and return as a nice string
+    def print_matrix(self):
+        end = time.time()
+        readable_time = time.ctime(end)
+        string = "\n\n" + str(readable_time) + ")\n"
+        string += "\nALEX\n["
+        # col_max = np.argmax(self.Q, axis=0)
+        for i in range(len(self.Q)):
+            string += " ["
+            for j in range(len(self.Q[i])):
+                '''
+                if (i == col_max[j]):
+                    number = np.round(self.Q[i, j], 3)
+                    string += " **{:04.3f}**, ".format(number)
+                '''
+                number = np.round(self.Q[i, j], 3)
+                string += "  {:04.3f}  , ".format(number)
+            string += "]\n"
+        string += "]"
+
+        print(string)
+        return string
 
     # save q-matrix as a .txt-file
-    def save_q_matrix(self, start, speed, distance):
+    def save_q_matrix(self):
         try:
             # open correct file
             f = open(
-                "/home/elisabeth/catkin_ws/src/drive_three_pi/src/Q_Matrix/Code/Learn_Simple_3/Q-Matrix-Records.txt",
+                "/home/elisabeth/catkin_ws/src/rl_matrix/src/Q_Matrix/Code/Learn_Simple_3/Q-Matrix-Records.txt",
                 "a")
-            # f = open("../Q_Matrix/Q-Matrix-Records.txt", "a")
 
-            # pretty print matrix
-            end = time.time()
-            readable_time = time.ctime(end)
-            string = "\n\n" + str(readable_time) + ")\n["
-            string += "\nALEX\n"
-            col_max = np.argmax(self.Q, axis = 0)
-            # col_max = self.Q.max(axis = 0)
-            for i in range(len(self.Q)):
-                string += " ["
-                for j in range(len(self.Q[i])):
-                    if (i == col_max[j]):
-                        number = np.round(self.Q[i, j], 3)
-                        string += " **{:04.3f}**, ".format(number)
-                    else:
-                        number = np.round(self.Q[i, j], 3)
-                        string += "  {:04.3f}  , ".format(number)
-                string += "]\n"
-            string += "]"
-
-            # pretty print results
-            total = end - start
-            minutes = total / 60.0
-            string += "\nAverage speed = "
-            string += str(speed)
-            string += "m/s\nSeconds = "
-            string += str(total)
-            string += "\nMinutes = "
-            string += str(minutes)
-            string += "\nDistance = "
-            string += str(distance)
-            string += "m"
+            #get nice matrix string
+            string = self.print_matrix()
 
             # write into file
             f.write(string)
@@ -452,7 +445,7 @@ class Node:
       self.sensoryState = -1 ;
       self.lastSensoryState = -1000 ;
 
-      max_episodes = 200
+      max_episodes = 1000
 
       try:
         rate = rospy.Rate(20)
@@ -476,6 +469,7 @@ class Node:
                 self.stopRobot() ;
                 self.reset_environment()
                 episode_counter += 1
+                self.print_matrix()
                 continue ;
 
               if self.exploration():
