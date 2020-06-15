@@ -296,7 +296,56 @@ class Node:
         print("Speed = " + str(speed) + " m/s)")
 
         # save q matrix and records for later
-        #self.bot.save_q_matrix(self.start, speed, distance)
+        self.save_q_matrix(self.start, speed, distance)
+
+    # save q-matrix as a .txt-file
+    def save_q_matrix(self, start, speed, distance):
+        try:
+            # open correct file
+            f = open(
+                "/home/elisabeth/catkin_ws/src/drive_three_pi/src/Q_Matrix/Code/Learn_Simple_3/Q-Matrix-Records.txt",
+                "a")
+            # f = open("../Q_Matrix/Q-Matrix-Records.txt", "a")
+
+            # pretty print matrix
+            end = time.time()
+            readable_time = time.ctime(end)
+            string = "\n\n" + str(readable_time) + ")\n["
+            string += "\nALEX\n"
+            col_max = np.argmax(self.Q, axis = 0)
+            # col_max = self.Q.max(axis = 0)
+            for i in range(len(self.Q)):
+                string += " ["
+                for j in range(len(self.Q[i])):
+                    if (i == col_max[j]):
+                        number = np.round(self.Q[i, j], 3)
+                        string += " **{:04.3f}**, ".format(number)
+                    else:
+                        number = np.round(self.Q[i, j], 3)
+                        string += "  {:04.3f}  , ".format(number)
+                string += "]\n"
+            string += "]"
+
+            # pretty print results
+            total = end - start
+            minutes = total / 60.0
+            string += "\nAverage speed = "
+            string += str(speed)
+            string += "m/s\nSeconds = "
+            string += str(total)
+            string += "\nMinutes = "
+            string += str(minutes)
+            string += "\nDistance = "
+            string += str(distance)
+            string += "m"
+
+            # write into file
+            f.write(string)
+
+            # close file
+            f.close()
+        except Exception as e:
+            print(str(e) + "\nFile not written")
 
     # puts robot back to starting position
     def reset_environment(self):
@@ -313,6 +362,7 @@ class Node:
       if (rd < self.explorationProb):
         # explore
         self.explorationMode = True ;
+        # self.explorationProb -= self.decay_rate
         return True
       else:
         # exploit
@@ -402,39 +452,64 @@ class Node:
       self.sensoryState = -1 ;
       self.lastSensoryState = -1000 ;
 
+      max_episodes = 200
+
       try:
         rate = rospy.Rate(20)
         while not rospy.is_shutdown():
-          img = self.receiveImage() ;
-          self.saveLastSensoryState() ;
-          self.sensoryState = self.computeSensoryState(img) ;
-          curReward = self.computeReward(img);
-          print("SensState",self.sensoryState) ;
-          print("MotorState",self.motorState) ;
+          if(episode_counter <= max_episodes):
+              img = self.receiveImage() ;
+              self.saveLastSensoryState() ;
+              self.sensoryState = self.computeSensoryState(img) ;
+              curReward = self.computeReward(img);
+              print("SensState",self.sensoryState) ;
+              print("MotorState",self.motorState) ;
 
-          # update Q matrix with sensory/motor state from last loop
-          if self.inExplorationMode() == True:
-            self.updateQ(curReward) ;
+              # update Q matrix with sensory/motor state from last loop
+              if self.inExplorationMode() == True:
+                self.updateQ(curReward) ;
 
-          # if terminal state (lost line) is reached, get out of for loop
-          # stop robot and put it back to starting position
-          if self.isTerminalState():
-            print ("NEW EPISODE!", episode_counter+1);
-            self.stopRobot() ;
-            self.reset_environment()
-            episode_counter += 1
-            continue ;
+              # if terminal state (lost line) is reached, get out of for loop
+              # stop robot and put it back to starting position
+              if self.isTerminalState():
+                print ("NEW EPISODE!", episode_counter+1);
+                self.stopRobot() ;
+                self.reset_environment()
+                episode_counter += 1
+                continue ;
 
-          if self.exploration():
-            action = self.getRandomAction() ;
-            self.setMotorState(action) ;
+              if self.exploration():
+                action = self.getRandomAction() ;
+                self.setMotorState(action) ;
+              else:
+                action = self.getBestAction() ;
+                self.setMotorState(action) ;
+              print("new motor state =", self.motorState)
+              print("-"*30)
+              # ------------------
+              #rate.sleep()
           else:
-            action = self.getBestAction() ;
-            self.setMotorState(action) ;
-          print("new motor state =", self.motorState)
-          print("-"*30)
-          # ------------------
-          #rate.sleep()
+              print("Driving!")
+              img = self.receiveImage();
+              self.saveLastSensoryState();
+              self.sensoryState = self.computeSensoryState(img);
+              curReward = self.computeReward(img);
+              print("SensState", self.sensoryState);
+              print("MotorState", self.motorState);
+
+              # if terminal state (lost line) is reached, get out of for loop
+              # stop robot and put it back to starting position
+              if self.isTerminalState():
+                  #print("NEW EPISODE!", episode_counter + 1);
+                  self.stopRobot();
+                  self.reset_environment()
+                  #episode_counter += 1
+                  continue;
+
+              action = self.getBestAction();
+              self.setMotorState(action);
+              print("new motor state =", self.motorState)
+              print("-" * 30)
 
       except rospy.ROSInterruptException:
           pass

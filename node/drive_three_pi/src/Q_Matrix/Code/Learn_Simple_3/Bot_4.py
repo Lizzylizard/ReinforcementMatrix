@@ -53,34 +53,34 @@ class Bot:
 
         # returns the reward for a taken action
 
-    def calculate_reward(self, curr_state, last_action):
+    def calculate_reward(self, curr_state):
         # return value
         reward = 0
 
         if (curr_state == 3):
             # best case: middle
-            reward = 10
+            reward = 0
         elif (curr_state == 2):
             # second best case: slightly left
-            reward = 5
+            reward = -1
         elif (curr_state == 1):
-            # third best case: left
-            reward = 2
+            # bad case: left
+            reward = -2
         elif (curr_state == 0):
-            # fourth best case: far left
-            reward = 1
+            # worse case: far left
+            reward = -3
         elif (curr_state == 4):
             # second best case: slightly right
-            reward = 5
+            reward = -1
         elif (curr_state == 5):
-            # third best case: right
-            reward = 2
+            # bad case: right
+            reward = -2
         elif (curr_state == 6):
-            # fourth best case: far right
-            reward = 1
+            # worse case: far right
+            reward = -3
         else:
             # worst case: line is lost
-            reward = (-50)
+            reward = (-100)
 
         return reward
 
@@ -155,9 +155,9 @@ class Bot:
 
     def get_state(self, img):
         line_state = self.img_helper.get_line_state(img)
-        left, right, line_state_str, middle = self.img_helper.get_stats()
+        # left, right, line_state_str, middle = self.img_helper.get_stats()
         #for later: check speed here and update state
-        return line_state, left, right, line_state_str, middle
+        return line_state
         
     #explore by chosing a random action
 
@@ -182,7 +182,7 @@ class Bot:
     #use filled q-matrix to simply drive 
     def drive(self, img):
         state = self.get_state(img)
-        action = np.argmax(self.Q[state[0],:])
+        action = np.argmax(self.Q[state,:])
         if(state == self.lost_line):
             #stop robot if line is lost
             action = self.stop_action
@@ -199,11 +199,16 @@ class Bot:
             end = time.time() 
             readable_time = time.ctime(end)
             string = "\n\n" + str(readable_time) + ")\n["
+            string += "\nICH\n"
             for i in range(len(self.Q)):
                 string += " ["
+                row_max = np.argmax(self.Q[i, :])
+                number = np.round(self.Q[i], 3)
                 for j in range (len(self.Q[i])):
-                    number = np.round(self.Q[i], 3)
-                    string += " {:04.3f}, ".format(number[j])
+                    if(j == row_max):
+                        string += " **{:04.3f}**, ".format(number[j])
+                    else:
+                        string += "  {:04.3f}  , ".format(number[j])
                 string += "]\n"
             string += "]"
             
@@ -236,7 +241,7 @@ class Bot:
                 row_max = np.argmax(self.Q[i, :])
                 if(j == row_max):
                     number = np.round(self.Q[i], 3)
-                    string += " *{:04.3f}*, ".format(number[j])
+                    string += " **{:04.3f}**, ".format(number[j])
 
                 else:
                     number = np.round(self.Q[i], 3)

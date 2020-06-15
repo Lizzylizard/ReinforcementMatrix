@@ -238,25 +238,25 @@ class MyImage:
             # just define that if line is ALMOST lost, it is completely lost,
             # so terminal state gets reached
             state = 7
-        elif (self.middle >= (width * (0.0 / 100.0)) and self.middle <= (width * (15.0 / 100.0))):
+        elif (self.middle >= (width * (0.0 / 100.0)) and self.middle <= (width * (20.0 / 100.0))):
             # line is far left
             state = 0
-        elif (self.middle > (width * (15.0 / 100.0)) and self.middle <= (width * (30.0 / 100.0))):
+        elif (self.middle > (width * (20.0 / 100.0)) and self.middle <= (width * (40.0 / 100.0))):
             # line is left
             state = 1
-        elif (self.middle > (width * (30.0 / 100.0)) and self.middle <= (width * (45.0 / 100.0))):
+        elif (self.middle > (width * (40.0 / 100.0)) and self.middle <= (width * (48.0 / 100.0))):
             # line is slightly left
             state = 2
-        elif (self.middle > (width * (45.0 / 100.0)) and self.middle <= (width * (55.0 / 100.0))):
+        elif (self.middle > (width * (48.0 / 100.0)) and self.middle <= (width * (52.0 / 100.0))):
             # line is in the middle
             state = 3
-        elif (self.middle > (width * (55.0 / 100.0)) and self.middle <= (width * (70.0 / 100.0))):
+        elif (self.middle > (width * (52.0 / 100.0)) and self.middle <= (width * (60.0 / 100.0))):
             # line is slightly right
             state = 4
-        elif (self.middle > (width * (70.0 / 100.0)) and self.middle <= (width * (85.0 / 100.0))):
+        elif (self.middle > (width * (60.0 / 100.0)) and self.middle <= (width * (80.0 / 100.0))):
             # line is right
             state = 5
-        elif (left > (self.middle * (85.0 / 100.0)) and self.middle < (width * (99.0 / 100.0))):
+        elif (left > (self.middle * (80.0 / 100.0)) and self.middle < (width * (100.0 / 100.0))):
             # line is far right
             state = 6
         else:
