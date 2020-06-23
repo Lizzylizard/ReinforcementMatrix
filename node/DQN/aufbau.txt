@@ -1,0 +1,14 @@
+Aufbau Neuronales Netz 3 Pi Roboter:
+- Eingabeschicht (Ein[Y, 1, 50], Aus[50Y]):
+	- Nimmt entgegen: Status (Bild der Linie, bzw. aufeinanderfolgende Bilder der Linie)
+	- Größe: 50Y (Y = Anzahl der Bilder, 1 = Höhe eines Bildes, 50 = Breite eines Bildes)
+	- Ausgabe: 1D Array (alle Bilder hintereinander)
+- Hidden Layer 1 (Ein[50Y], Aus[?]):
+	- Nimmt entgegen: Ausgabe der Eingabeschicht
+	- Größe: ?
+	- Ausgabe: 8
+- Ausgabeschicht (Ein[?], Aus[8]):
+	- Nimmt entgegen: Ausgabe von Hidden Layer 1
+	- Größe: 8
+	- Ausgabe: Q-Werte aller möglichen Aktionen 
+		-> 1D Array mit der Länge 8 (stark links, links, etwas links, vorwärts, etwas rechts, rechts, stark rechts, stop)
