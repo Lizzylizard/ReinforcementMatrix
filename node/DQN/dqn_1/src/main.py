@@ -3,6 +3,7 @@
 # import own scripts
 import matrix as bt
 import image as mi
+import Memory
 
 # import numpy
 import numpy as np
@@ -67,6 +68,7 @@ class Node:
     # helper classes
     self.bot = bt.Bot()  # reward + q-matrix
     self.imgHelper = mi.MyImage()  # image processing
+    self.memory = Memory.Memory(100) # replay buffer
 
     # global variables
     # images
@@ -530,6 +532,12 @@ class Node:
                 self.curr_state)))
             reward = self.bot.calculate_reward(self.curr_state)
             print("Reward: " + str(reward))
+
+            # store experience
+            ################### HERE: STATES MUST BE IMAGES ##########
+            self.memory.store_experience(state, last_state,
+                                         curr_action, reward)
+            ##########################################################
 
             # get target values
             targets = self.fill_targes(self.curr_action, reward)
