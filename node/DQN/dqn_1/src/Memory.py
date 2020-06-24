@@ -4,26 +4,23 @@ from numpy import random
 
 
 class Memory():
-  self.experiences = []
-  self.memory_size = None
 
   def __init__(self, memory_size):
     self.memory_size = memory_size
-    self.experiences = np.zeros(shape=[self.memory_size])
+    self.experiences = [None] * self.memory_size
+    self.count = 0
 
-  def make_tupel(self, state, last_state, action, reward):
-    tupel = {state: state, last_state: last_state, action: action, \
+  def make_tuple(self, state, last_state, action, reward):
+    tuple = {state: state, last_state: last_state, action: action, \
             reward: reward}
-    return tupel
+    return tuple
 
   def store_experience(self, state, last_state, action, reward):
-    experience_tupel = self.make_tupel(state, last_state, action,
+    experience_tuple = self.make_tuple(state, last_state, action,
                                        reward)
-    if(len(self.experiences) < self.memory_size):
-      self.experiences.append(experience_tupel)
-    else:
-      self.experiences.pop(0)
-      self.experiences.append(experience_tupel)
+    i = self.count % self.memory_size
+    self.experiences[i] = experience_tuple
+    self.count += 1
 
   def get_random_experience(self, batch_size):
     experience = []
