@@ -446,30 +446,31 @@ class Node:
     self.targets_p = tf.compat.v1.placeholder(tf.float64, [out0, out1])
 
     # layer 1
-    self.W1 = tf.Variable(np.random.uniform(-0.01, 0.01, [size_input,
+    self.W1 = tf.Variable(np.random.uniform(-1, 1, [size_input,
                                                      size_layer]))
-    self.b1 = tf.Variable(np.random.uniform(-0.01, 0.01,
+    self.b1 = tf.Variable(np.random.uniform(-1, 1,
                                             [size_layer]),
                      name="b1")
     self.a1 = tf.compat.v1.nn.relu_layer(self.a0, self.W1, self.b1,
                                          "a1")
 
     # layer 2
-    self.W2 = tf.Variable(np.random.uniform(-0.01, 0.01, [size_layer,
-                                                     size_layer]))
-    self.b2 = tf.Variable(np.random.uniform(-0.01, 0.01,
-                                            [size_layer]),
+    self.W2 = tf.Variable(np.random.uniform(-1, 1, [size_layer,
+                                                     size_layer-10]))
+    self.b2 = tf.Variable(np.random.uniform(-1, 1,
+                                            [size_layer-10]),
                      name="b2")
     self.a2 = tf.compat.v1.nn.relu_layer(self.a1, self.W2, self.b2,
                                          "a2")
 
     # output
-    self.W3 = tf.Variable(np.random.uniform(-0.01, 0.01, [size_layer,
+    self.W3 = tf.Variable(np.random.uniform(-1, 1, [size_layer-10,
                                                      out1]))
-    self.b3 = tf.Variable(np.random.uniform(-0.01, 0.01, [out0,
+    self.b3 = tf.Variable(np.random.uniform(-1, 1, [out0,
                                                      out1]),
                      name="b3")
     self.a3 = tf.compat.v1.matmul(self.a2, self.W3) + self.b3
+    self.a4 = tf.compat.v1.nn.softmax(self.a3)
     # print("Shape a3 = " + str(np.shape(a3)))
 
     # initialize
@@ -499,9 +500,28 @@ class Node:
     # run session (generate ouput from input)
     # sess.run(tf.compat.v1.global_variables_initializer())
     for i in range(epochs):
-      output, loss2, upOp = sess.run([self.a3, loss,
-                                      updateOp], feed_dict={
-        self.input: images, self.targets_p: tgts})
+      #output, loss2, upOp = sess.run([self.a3, loss,
+      #                                updateOp], feed_dict={
+      #  self.input: images, self.targets_p: tgts})
+      output, loss2, upOp, a2S, a1S,a0S, w1S, b1S, w2S, \
+      b2S, w3S, b3S, a4S = sess.run([self.a3, loss,
+                                              updateOp,
+            self.a2, self.a1, self.a0, self.W1, self.b1, self.W2,
+                                self.b2, self.W3, self.b3, self.a4],
+                               feed_dict={
+           self.input: images, self.targets_p: tgts})
+      #print("a0: ", a0S)
+      #print("w1: ", w1S)
+      #print("b1: ", b1S)
+      #print("a1: ", a1S)
+      #print("w2: ", w2S)
+      #print("b2: ", b2S)
+      #print("a2: ", a2S)
+      # print("w3: ", w3S)
+      #print("b3: ", b3S)
+      #print("a4: ", a4S)
+      print("targets: ", tgts)
+
       # print("\n\nShape output = " +  str(np.shape(output)))
       print("Loss = " + str(loss2))
       # print("sgdObj = " + str(sgdObj))
@@ -512,6 +532,7 @@ class Node:
     # print("Weights = " + str(updatedWeights))
     return output
 
+  '''
   # 'one-hot' coding for target values
   def fill_targets(self, action, reward):
     for i in range(len(self.targets)):
@@ -519,6 +540,20 @@ class Node:
         self.targets[0, i] = 1
       else:
         self.targets[0, i] = 0
+    return self.targets
+  '''
+  # 'one-hot' coding for target values
+  def fill_targets(self, state):
+    for i in range(len(self.targets[0])):
+      self.targets[0, i] = 0
+    self.targets[0, state] = 1
+    '''
+    for i in range(len(self.targets)):
+      if(i == state):
+        self.targets[0, i] = 1
+      else:
+        self.targets[0, i] = 0
+    '''
     return self.targets
 
   # main program
@@ -596,7 +631,8 @@ class Node:
                                          self.curr_action, reward)
 
             # get target values
-            targets = self.fill_targets(self.curr_action, reward)
+            # targets = self.fill_targets(self.curr_action, reward)
+            targets = self.fill_targets(self.last_state)
 
             # initialize network in first loop
             if(episode_counter < 1):
