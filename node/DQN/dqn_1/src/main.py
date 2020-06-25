@@ -100,7 +100,7 @@ class Node:
     self.z_position = -0.0298790967155
 
     # inital values
-    self.max_episodes = 100
+    self.max_episodes = 1000
     self.speed = 15.0
 
     # deviation from speed to turn the robot to the left or to the
@@ -147,7 +147,7 @@ class Node:
     }
 
     # neural network
-    self.targets = np.zeros(shape=[1, len(self.action_strings)],
+    self.targets = np.zeros(shape=[1, (len(self.action_strings)-1)],
                             dtype='float64')
     # output
     self.q_values = None
@@ -166,6 +166,7 @@ class Node:
     self.a1 = None
     self.a2 = None
     self.a3 = None
+    self.a4 = None
 
     # publisher to publish on topic /cmd_vel
     self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist,
@@ -520,7 +521,7 @@ class Node:
       # print("w3: ", w3S)
       #print("b3: ", b3S)
       #print("a4: ", a4S)
-      print("targets: ", tgts)
+      # print("targets: ", tgts)
 
       # print("\n\nShape output = " +  str(np.shape(output)))
       print("Loss = " + str(loss2))
@@ -530,6 +531,12 @@ class Node:
       # print(output)
 
     # print("Weights = " + str(updatedWeights))
+    return output
+
+  # use network to drive, do not update weights anymore
+  # returns q-values
+  def use_network(self, images, sess):
+    output = sess.run(self.a3, feed_dict={self.input: images})
     return output
 
   '''
@@ -546,14 +553,21 @@ class Node:
   def fill_targets(self, state):
     for i in range(len(self.targets[0])):
       self.targets[0, i] = 0
-    self.targets[0, state] = 1
-    '''
-    for i in range(len(self.targets)):
-      if(i == state):
-        self.targets[0, i] = 1
-      else:
-        self.targets[0, i] = 0
-    '''
+    if not (state == self.lost_line):
+      self.targets[0, state] = 1
+    # if robot lost the line -> no way of knowing what the best
+    # possible next action might be, so choose randomly every time
+    else:
+      rand = np.random.randint(low=0, high=(len(self.targets)),
+                               size=1)
+      self.targets[0, rand] = 1
+      '''
+      for i in range(len(self.targets)):
+        if(i == state):
+          self.targets[0, i] = 1
+        else:
+          self.targets[0, i] = 0
+      '''
     return self.targets
 
   # main program
@@ -595,8 +609,13 @@ class Node:
     # pre-defined matrix
     learn = True
 
+    # images
     # number consecutive images
     self.stack_of_images = 1
+    # image for current state
+    img = np.zeros(shape=[self.stack_of_images, 1, 50])
+    # image for last state
+    last_img = np.zeros(shape=[self.stack_of_images, 1, 50])
 
     # important steps of the algorithm
     try:
@@ -610,48 +629,91 @@ class Node:
           if (episode_counter <= self.max_episodes):
             # wait for next image
             # img = self.get_stack_of_images()
-            img = np.zeros(shape=[self.stack_of_images, 1, 50])
+            last_img = img
             img[0] = self.get_image()
             # print("Shape of image = " + str(np.shape(img)))
 
             # save last state, get new state and calculate reward
             self.last_state = self.curr_state
-            #print("Last state: " + str(
-              #self.state_strings.get(self.last_state)))
+            print("Last state: " + str(
+              self.state_strings.get(self.last_state)))
             self.curr_state = self.bot.get_state(img[
                                                    self.stack_of_images-1])
-            #print("Current state: " + str(self.state_strings.get(
-               # self.curr_state)))
+            print("Current state: " + str(self.state_strings.get(
+               self.curr_state)))
             reward = self.bot.calculate_reward(self.curr_state)
-            #print("Reward: " + str(reward))
+            print("Reward: " + str(reward))
 
             # store experience
-            self.memory.store_experience(self.curr_state,
-                                         self.last_state,
-                                         self.curr_action, reward)
+            # but do not store very first experience (nonsense values)
+            if not(self.curr_action == -1):
+              self.memory.store_experience(img, last_img,
+                                           self.curr_action, reward)
 
             # get target values
             # targets = self.fill_targets(self.curr_action, reward)
             targets = self.fill_targets(self.last_state)
 
             # initialize network in first loop
-            if(episode_counter < 1):
+            if (self.curr_action == -1):
               self.build_network(images=img, size_layer=100,
-                                 tgts=targets, sess = sess)
+                                 tgts=targets, sess=sess)
 
-            # put input in network model
-            output = self.update_weights(images=img,
-              learning_rate=0.01, sess=sess, epochs=1,tgts=targets)
-            print("\n\nOutput of DNN = " + str(output))
-            self.q_values = output
-            #print("Q Values = " + str(self.q_values))
+            # update NN if the last state was not 'lost'
+            # otherwise it will only learn to stop,
+            # because after a stop action, the robot will always
+            # be in the middle -> highest reward
+            if not (self.last_state == self.lost_line):
 
-            # save reward for last state and current
-            # action in q-matrix
-            # self.bot.update_q_table(self.last_state,
-                                  #  self.curr_action,
-                                  #  alpha, reward, gamma,
-                                  #  self.curr_state)
+              # get random (batch of) experience(s)
+              experience = []
+              batch_sz = self.stack_of_images
+              if not (self.curr_action == -1):
+                experience = self.memory.get_random_experience(
+                  batch_size=batch_sz)
+                '''
+                exp_img = experience[0].get("state")
+                exp_last_img = experience[0].get("last_state")
+                exp_action = experience[0].get("action")
+                exp_reward = experience[0].get("reward")
+                '''
+
+              # put input in network model
+              # use experiences by a chance of 50% if enough episodes
+              # explored
+              rand = random.uniform(0, 1)
+              if (
+                episode_counter >= self.max_episodes / 4 and rand >= 0.5):
+                print("Using experience")
+                # make a stack of experience images
+                exp_img = np.zeros(
+                  shape=[self.stack_of_images, 1, 50])
+                for i in range(len(experience)):
+                  exp_img[i] = experience[i].get("state")
+
+                # feed network
+                output = self.update_weights(images=exp_img,
+                                             learning_rate=0.01,
+                                             sess=sess, epochs=1,
+                                             tgts=targets)
+
+              # make new experiences
+              else:
+                output = self.update_weights(images=img,
+                                             learning_rate=0.01,
+                                             sess=sess, epochs=1,
+                                             tgts=targets)
+
+              # print("\n\nOutput of DNN = " + str(output))
+              self.q_values = output
+              # print("Q Values = " + str(self.q_values))
+
+              # save reward for last state and current
+              # action in q-matrix
+              # self.bot.update_q_table(self.last_state,
+              #  self.curr_action,
+              #  alpha, reward, gamma,
+              #  self.curr_state)
 
             # begin a new episode if robot lost the line
             if (self.curr_state == self.lost_line):
@@ -661,7 +723,7 @@ class Node:
               self.reset_environment()
               # episode is done => increase counter
               episode_counter += 1
-              #print("NEW EPISODE: ", episode_counter)
+              print("NEW EPISODE: ", episode_counter)
               # print current q-matrix to see what's
               # going on
               # self.bot.printMatrix(time.time())
@@ -672,18 +734,22 @@ class Node:
             # get the next action
             # if exploring: choose random action
             if (self.epsilon_greedy(exploration_prob)):
-              #print("Exploring")
+              print("Exploring")
               action = self.bot.explore(img[self.stack_of_images-1])
-              #print("Action: " + self.action_strings.get(action))
+              print("Action: " + self.action_strings.get(action))
               self.execute_action(action)
               self.curr_action = action
             # if exploiting: choose best action
             else:
-              #print("Exploiting")
+              print("Exploiting")
               # action = self.bot.exploit(img[
               # self.stack_of_images-1], self.curr_state)
+              # choose best action by only using the NN, but not
+              # updating it
+              self.q_values = self.use_network(images=img, sess=
+              sess)
               action = np.argmax(self.q_values)
-              #print("Action: " + self.action_strings.get(action))
+              print("Action: " + self.action_strings.get(action))
               self.execute_action(action)
               self.curr_action = action
 
@@ -708,9 +774,12 @@ class Node:
 
             print("Driving!")
             # wait for new image
-            img = self.get_image()
-            # choose best next action out of q-matrix
-            action = self.bot.drive(img)
+            img[0] = self.get_image()
+            # choose best next action from neural network
+            # action = self.bot.drive(img)
+            # use NN, do NOT update it
+            self.q_values = self.use_network(images=img, sess=sess)
+            action = np.argmax(self.q_values)
             #print("Action: " + self.action_strings.get(
               #action))
             # execute action
