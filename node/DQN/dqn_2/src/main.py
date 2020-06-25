@@ -100,7 +100,7 @@ class Node:
     self.z_position = -0.0298790967155
 
     # inital values
-    self.max_episodes = 1000
+    self.max_episodes = 250
     self.speed = 15.0
 
     # deviation from speed to turn the robot to the left or to the
@@ -374,29 +374,6 @@ class Node:
     self.vel_msg = self.stop()
     self.velocity_publisher.publish(self.vel_msg)
 
-    # print statistics
-    end = time.time()
-    total = end - self.start
-    minutes = total / 60.0
-    speed = self.speed
-    distance = speed * total
-
-    total_learning_time = self.learning_time - self.start
-    minutes_learning = total_learning_time / 60.0
-    print("Learning time = " + str(
-      total_learning_time) + " seconds = " + str(minutes_learning)
-          + " minutes")
-    print("Number Episodes = " + str(self.max_episodes))
-    print("Total time = " + str(total) + " seconds = " + str(
-      minutes) + " minutes")
-    print("Distance = " + str(distance) + " meters")
-    print("Speed = " + str(speed) + " m/s)")
-
-    # save q matrix and records for later
-    self.bot.save_q_matrix(end, total_learning_time,
-                           self.max_episodes, minutes_learning,
-                           total, minutes, distance, speed)
-
   # puts robot back to starting position
   def reset_environment(self):
     self.choose_random_starting_position()
@@ -481,9 +458,9 @@ class Node:
   def update_weights(self, images, learning_rate, sess, epochs, tgts):
     # loss
     loss = tf.reduce_mean(
-      tf.nn.softmax_cross_entropy_with_logits_v2(tgts, self.a3))
+      tf.nn.softmax_cross_entropy_with_logits_v2(tgts, self.a4))
     # loss = tf.reduce_mean(tf.compat.v1.losses.mean_squared_error(
-    # targets, a3))
+      # tgts, self.a3))
 
     # update weights
     '''
@@ -540,7 +517,7 @@ class Node:
     return output
 
   # 'one-hot' coding for target values
-  def fill_targets(self, state):
+  def fill_targets_old(self, state):
     for i in range(len(self.targets[0])):
       self.targets[0, i] = 0
     if not (state == self.lost_line):
@@ -551,6 +528,13 @@ class Node:
       rand = np.random.randint(low=0, high=(len(self.targets)),
                                size=1)
       self.targets[0, rand] = 1
+    return self.targets
+
+  # 'one-hot' coding for target values
+  def fill_targets(self, action, reward):
+    for i in range(len(self.targets[0])):
+      self.targets[0, i] = 0
+    self.targets[0, action] = reward
     return self.targets
 
   # main program
@@ -565,6 +549,7 @@ class Node:
     # episodes
     self.explorationMode = False  # exploring or exploiting?
     episode_counter = 0  # number of done episodes
+    step_counter = 0  # counts every while iteration
     gamma = 0.95  # learning rate
     alpha = 0.8  # learning rate
 
@@ -601,6 +586,9 @@ class Node:
     # network
     self.build_network(images=img, size_layer=100, tgts=targets,
                        sess=sess)
+    # run NN one time with only zeros to initialize targets
+    self.q_values = sess.run(self.a3, feed_dict={self.input: img})
+    targets = self.q_values
 
 
     # important steps of the algorithm
@@ -632,6 +620,13 @@ class Node:
           self.memory.store_experience(img, last_img,
                                        self.curr_action, reward)
 
+          # get target values
+          # targets = self.fill_targets(self.last_state)
+          # targets = self.fill_targets(self.curr_action, reward)
+          if(step_counter % 100 == 1):
+            targets = self.q_values
+            print("Targets = " + str(targets))
+
           # begin a new episode if robot lost the line
           if (self.curr_state == self.lost_line):
             # stop robot
@@ -647,9 +642,6 @@ class Node:
             print("-" * 100)
             # skip the next steps and start a new loop
             continue
-
-          # get target values
-          targets = self.fill_targets(self.last_state)
 
           '''
           # update NN if the last state was not 'lost'
@@ -696,7 +688,7 @@ class Node:
           '''
 
           # get q-values for current state via the NN
-          output = self.update_weights(images=img,
+          output = self.update_weights(images=last_img,
                                        learning_rate=0.01,
                                        sess=sess, epochs=1,
                                        tgts=targets)
@@ -706,12 +698,23 @@ class Node:
           # print("Q Values = " + str(self.q_values))
 
           # get the next action
-          # TO DO: implement epsilon greedy
-          # choose best action by only using the NN
-          action = np.argmax(self.q_values)
-          print("Action: " + self.action_strings.get(action))
-          self.execute_action(action)
-          self.curr_action = action
+          # if exploring: choose random action
+          if (self.epsilon_greedy(exploration_prob)):
+            print("Exploring")
+            action = self.bot.explore(img[self.stack_of_images - 1])
+            print("Action: " + self.action_strings.get(action))
+            self.execute_action(action)
+            self.curr_action = action
+          # if exploiting: choose best action
+          else:
+            print("Exploiting")
+            # choose best action by using the NN with the current
+            # image, not updating it
+            self.q_values = self.use_network(images=img, sess=sess)
+            action = np.argmax(self.q_values)
+            print("Action: " + self.action_strings.get(action))
+            self.execute_action(action)
+            self.curr_action = action
 
           # decay the probability of exploring
           exploration_prob = min_exploration_rate + (
@@ -748,6 +751,8 @@ class Node:
           # robot learned properly)
           if (action == self.stop_action):
             self.reset_environment()
+
+        step_counter += 1
 
     except rospy.ROSInterruptException:
       pass

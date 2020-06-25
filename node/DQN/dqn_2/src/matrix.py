@@ -57,28 +57,28 @@ class Bot:
   def calculate_reward(self, curr_state):
     if (curr_state == 3):
       # best case: middle
-      reward = 0
+      reward = 4
     elif (curr_state == 2):
       # second best case: slightly left
-      reward = -1
+      reward = 3
     elif (curr_state == 1):
       # bad case: left
-      reward = -2
+      reward = 2
     elif (curr_state == 0):
       # worse case: far left
-      reward = -3
+      reward = 1
     elif (curr_state == 4):
       # second best case: slightly right
-      reward = -1
+      reward = 3
     elif (curr_state == 5):
       # bad case: right
-      reward = -2
+      reward = 2
     elif (curr_state == 6):
       # worse case: far right
-      reward = -3
+      reward = 1
     else:
       # worst case: line is lost
-      reward = (-1000)
+      reward = (-10)
 
     return reward
 
