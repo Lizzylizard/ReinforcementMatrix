@@ -4,6 +4,7 @@
 import matrix as bt
 import image as mi
 import Memory
+import Network
 
 # import numpy
 import numpy as np
@@ -56,8 +57,8 @@ class Node:
   def get_stack_of_images(self):
     nr_images = self.img_cnt
     mod_old = -1
-    while (self.img_cnt <= (nr_images + self.stack_of_images)):
-      mod_new = self.img_cnt % self.stack_of_images
+    while (self.img_cnt <= (nr_images + self.number_of_images)):
+      mod_new = self.img_cnt % self.number_of_images
       if not (mod_new == mod_old):
         self.img_stack[mod_new][0] = self.my_img
       mod_old = mod_new
@@ -74,8 +75,8 @@ class Node:
     # images
     self.my_img = np.zeros(50)  # current image
     # next couple of (four) consecutive images
-    self.stack_of_images = 4
-    self.img_stack = np.zeros(shape=[self.stack_of_images, 1,
+    self.number_of_images = 1
+    self.img_stack = np.zeros(shape=[self.number_of_images, 1,
                                    len(self.my_img)])
     self.img_cnt = 0  # number of images received
 
@@ -100,7 +101,7 @@ class Node:
     self.z_position = -0.0298790967155
 
     # inital values
-    self.max_episodes = 250
+    self.max_episodes = 200
     self.speed = 15.0
 
     # deviation from speed to turn the robot to the left or to the
@@ -111,17 +112,6 @@ class Node:
       1.0 / 8.5)  # middle curve => middle difference
     self.slightly = self.speed * (
       1.0 / 10.0)  # slight curve => slight difference
-
-    '''
-    Did work with 'old' reward function:
-    #inital values
-    self.speed = 20.0
-
-    #deviation from speed so average speed stays the same
-    self.sharp = self.speed * (1.0/7.0)         #sharp curve => big difference
-    self.middle = self.speed * (1.0/8.5)        #middle curve => middle difference
-    self.slightly = self.speed * (1.0/10.0)     #slight curve => slight difference
-    '''
 
     # strings to display actions and states
     self.action_strings = {
@@ -147,26 +137,16 @@ class Node:
     }
 
     # neural network
-    self.targets = np.zeros(shape=[1, (len(self.action_strings)-1)],
-                            dtype='float64')
-    # output
-    self.q_values = None
-    #placeholders
-    self.input = None
-    self.targets_p = None
-    # weights
-    self.W1 = None
-    self.W2 = None
-    self.W3 = None
-    self.b1 = None
-    self.b2 = None
-    self.b3 = None
-    # activations
-    self.a0 = None
-    self.a1 = None
-    self.a2 = None
-    self.a3 = None
-    self.a4 = None
+    # target vector
+    #self.targets = np.zeros(shape=[1, (len(self.action_strings)-1)],
+                            #dtype='float64')
+    self.sess = tf.compat.v1.Session()  # tensorflow session object
+    # policy network to train on
+    self.policy_net = Network.Network(images = self.img_stack,
+      size_layer1 = 100, size_layer2 = 90, session = self.sess)
+    # target network to calculate optimal q-values on
+    self.target_net = Network.Network(images = self.img_stack,
+      size_layer1 = 100, size_layer2 = 90, session = self.sess)
 
     # publisher to publish on topic /cmd_vel
     self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist,
@@ -394,149 +374,6 @@ class Node:
       self.explorationMode = False
       return False
 
-  # build a network
-  def build_network(self, images, size_layer, tgts, sess):
-    # shape input layer
-    # print("Shape of images = " + str(np.shape(images)))
-    dim0 = len(images)
-    # print("dim0 = " + str(dim0))
-    dim1 = len(images[0])
-    # print("dim1 = " + str(dim1))
-    dim2 = len(images[0][0])
-    # print("dim2 = " + str(dim2))
-    size_input = dim0 * dim1 * dim2
-    # print("input size = " + str(size_input))
-
-    # shape output layer
-    # print("Shape targets = " + str(np.shape(tgts)))
-    out0 = len(tgts)
-    # print("out0 = " + str(out0))
-    out1 = len(tgts[0])
-    # print("out1 = " + str(out1))
-
-    # input
-    self.input = tf.compat.v1.placeholder(tf.float64, [dim0, dim1,
-                                                     dim2])
-    self.a0 = tf.reshape(self.input, (-1, size_input))
-    # print("Shape a0 = " + str(np.shape(a0)))
-
-    # targets
-    self.targets_p = tf.compat.v1.placeholder(tf.float64, [out0, out1])
-
-    # layer 1
-    self.W1 = tf.Variable(np.random.uniform(-1, 1, [size_input,
-                                                     size_layer]))
-    self.b1 = tf.Variable(np.random.uniform(-1, 1,
-                                            [size_layer]),
-                     name="b1")
-    self.a1 = tf.compat.v1.nn.relu_layer(self.a0, self.W1, self.b1,
-                                         "a1")
-
-    # layer 2
-    self.W2 = tf.Variable(np.random.uniform(-1, 1, [size_layer,
-                                                     size_layer-10]))
-    self.b2 = tf.Variable(np.random.uniform(-1, 1,
-                                            [size_layer-10]),
-                     name="b2")
-    self.a2 = tf.compat.v1.nn.relu_layer(self.a1, self.W2, self.b2,
-                                         "a2")
-
-    # output
-    self.W3 = tf.Variable(np.random.uniform(-1, 1, [size_layer-10,
-                                                     out1]))
-    self.b3 = tf.Variable(np.random.uniform(-1, 1, [out0,
-                                                     out1]),
-                     name="b3")
-    self.a3 = tf.compat.v1.matmul(self.a2, self.W3) + self.b3
-    self.a4 = tf.compat.v1.nn.softmax(self.a3)
-    # print("Shape a3 = " + str(np.shape(a3)))
-
-    # initialize
-    sess.run(tf.compat.v1.global_variables_initializer())
-
-
-  def update_weights(self, images, learning_rate, sess, epochs, tgts):
-    # loss
-    loss = tf.reduce_mean(
-      tf.nn.softmax_cross_entropy_with_logits_v2(tgts, self.a4))
-    # loss = tf.reduce_mean(tf.compat.v1.losses.mean_squared_error(
-      # tgts, self.a3))
-
-    # update weights
-    '''
-    sgdObj = tf.compat.v1.train.AdamOptimizer(learning_rate=learning_rate,
-                                              beta1=0.9, beta2=0.999, epsilon=1e-08, use_locking=False,
-    name='Adam')
-    updateOp = sgdObj.minimize(loss)
-    '''
-    sgdObj = tf.train.GradientDescentOptimizer(
-      learning_rate=learning_rate)
-    updateOp = sgdObj.minimize(loss,
-                               var_list=[self.W1, self.W2, self.W3,
-                                         self.b1, self.b2, self.b3])
-
-    # run session (generate ouput from input)
-    # sess.run(tf.compat.v1.global_variables_initializer())
-    for i in range(epochs):
-      #output, loss2, upOp = sess.run([self.a3, loss,
-      #                                updateOp], feed_dict={
-      #  self.input: images, self.targets_p: tgts})
-      output, loss2, upOp, a2S, a1S,a0S, w1S, b1S, w2S, \
-      b2S, w3S, b3S, a4S = sess.run([self.a3, loss,
-                                              updateOp,
-            self.a2, self.a1, self.a0, self.W1, self.b1, self.W2,
-                                self.b2, self.W3, self.b3, self.a4],
-                               feed_dict={
-           self.input: images, self.targets_p: tgts})
-      #print("a0: ", a0S)
-      #print("w1: ", w1S)
-      #print("b1: ", b1S)
-      #print("a1: ", a1S)
-      #print("w2: ", w2S)
-      #print("b2: ", b2S)
-      #print("a2: ", a2S)
-      # print("w3: ", w3S)
-      #print("b3: ", b3S)
-      #print("a4: ", a4S)
-      # print("targets: ", tgts)
-
-      # print("\n\nShape output = " +  str(np.shape(output)))
-      print("Loss = " + str(loss2))
-      # print("sgdObj = " + str(sgdObj))
-      # print("Updated = " + str(upOp))
-      # print("-"*60)
-      # print(output)
-
-    # print("Weights = " + str(updatedWeights))
-    return output
-
-  # use network to drive, do not update weights anymore
-  # returns q-values
-  def use_network(self, images, sess):
-    output = sess.run(self.a3, feed_dict={self.input: images})
-    return output
-
-  # 'one-hot' coding for target values
-  def fill_targets_old(self, state):
-    for i in range(len(self.targets[0])):
-      self.targets[0, i] = 0
-    if not (state == self.lost_line):
-      self.targets[0, state] = 1
-    # if robot lost the line -> no way of knowing what the best
-    # possible next action might be, so choose randomly every time
-    else:
-      rand = np.random.randint(low=0, high=(len(self.targets)),
-                               size=1)
-      self.targets[0, rand] = 1
-    return self.targets
-
-  # 'one-hot' coding for target values
-  def fill_targets(self, action, reward):
-    for i in range(len(self.targets[0])):
-      self.targets[0, i] = 0
-    self.targets[0, action] = reward
-    return self.targets
-
   # main program
   def reinf_main(self):
     # tell program what to do on shutdown (user presses ctrl+c)
@@ -572,23 +409,10 @@ class Node:
     self.last_state = -1000
 
     # images
-    # number consecutive images
-    self.stack_of_images = 1
     # image for current state
-    img = np.zeros(shape=[self.stack_of_images, 1, 50])
+    img = np.zeros(shape=[self.number_of_images, 1, 50])
     # image for last state
-    last_img = np.zeros(shape=[self.stack_of_images, 1, 50])
-
-    # tensorflow session object
-    sess = tf.compat.v1.Session()
-    # initial targets (all zero)
-    targets = self.targets
-    # network
-    self.build_network(images=img, size_layer=100, tgts=targets,
-                       sess=sess)
-    # run NN one time with only zeros to initialize targets
-    self.q_values = sess.run(self.a3, feed_dict={self.input: img})
-    targets = self.q_values
+    last_img = np.zeros(shape=[self.number_of_images, 1, 50])
 
 
     # important steps of the algorithm
@@ -602,15 +426,15 @@ class Node:
           # wait for next image
           # img = self.get_stack_of_images()
           last_img = np.copy(img)
-          img[0] = self.get_image()
+          my_img = self.get_image()
+          img[0] = my_img
           # print("Shape of image = " + str(np.shape(img)))
 
           # save last state, get new state and calculate reward
           self.last_state = self.curr_state
           print("Last state: " + str(
             self.state_strings.get(self.last_state)))
-          self.curr_state = self.bot.get_state(img[
-                                                 self.stack_of_images-1])
+          self.curr_state = self.bot.get_state(my_img)
           print("Current state: " + str(self.state_strings.get(
              self.curr_state)))
           reward = self.bot.calculate_reward(self.curr_state)
@@ -620,12 +444,11 @@ class Node:
           self.memory.store_experience(img, last_img,
                                        self.curr_action, reward)
 
-          # get target values
+          # update target network
           # targets = self.fill_targets(self.last_state)
           # targets = self.fill_targets(self.curr_action, reward)
           if(step_counter % 100 == 1):
-            targets = self.q_values
-            print("Targets = " + str(targets))
+            self.target_net = self.policy_net.copy(self.target_net)
 
           # begin a new episode if robot lost the line
           if (self.curr_state == self.lost_line):
@@ -651,7 +474,7 @@ class Node:
           if not (self.last_state == self.lost_line):
             # get random (batch of) experience(s)
             experience = []
-            batch_sz = self.stack_of_images
+            batch_sz = self.number_of_images
             if not (self.curr_action == -1):
               experience = self.memory.get_random_experience(
                 batch_size=batch_sz)
@@ -665,7 +488,7 @@ class Node:
               print("Using experience")
               # make a stack of experience images
               exp_img = np.zeros(
-                shape=[self.stack_of_images, 1, 50])
+                shape=[self.number_of_images, 1, 50])
               for i in range(len(experience)):
                 exp_img[i] = experience[i].get("last_state")
 
@@ -687,11 +510,20 @@ class Node:
             # print("Q Values = " + str(self.q_values))
           '''
 
-          # get q-values for current state via the NN
-          output = self.update_weights(images=last_img,
-                                       learning_rate=0.01,
-                                       sess=sess, epochs=1,
-                                       tgts=targets)
+          # get optimal q-values for current state via the target
+          # network
+          # for later use:
+          # targets = self.target_net.use_network(images=last_img)
+          # current use: keep it simple
+          targets = np.zeros(shape=[1, 7])
+          for i in range(7):
+            targets[0, i] = 0
+          targets[0, self.curr_action] = reward
+          # update policy network with optimal q-values
+          output = self.policy_net.update_weights(images=last_img,
+                                                 epochs=1,
+                                                  targets=targets,
+                                                  learning_rate=0.01)
 
           # print("\n\nOutput of DNN = " + str(output))
           self.q_values = output
@@ -701,7 +533,7 @@ class Node:
           # if exploring: choose random action
           if (self.epsilon_greedy(exploration_prob)):
             print("Exploring")
-            action = self.bot.explore(img[self.stack_of_images - 1])
+            action = self.bot.explore(img[self.number_of_images - 1])
             print("Action: " + self.action_strings.get(action))
             self.execute_action(action)
             self.curr_action = action
@@ -710,11 +542,16 @@ class Node:
             print("Exploiting")
             # choose best action by using the NN with the current
             # image, not updating it
-            self.q_values = self.use_network(images=img, sess=sess)
+            self.q_values = self.policy_net.use_network(images=img)
             action = np.argmax(self.q_values)
             print("Action: " + self.action_strings.get(action))
             self.execute_action(action)
             self.curr_action = action
+
+          # react fast if line is lost
+          fast_state = self.bot.get_state(my_img)
+          if(fast_state == self.lost_line):
+            self.stopRobot()
 
           # decay the probability of exploring
           exploration_prob = min_exploration_rate + (
@@ -741,10 +578,9 @@ class Node:
           # choose best next action from neural network
           # action = self.bot.drive(img)
           # use NN, do NOT update it
-          self.q_values = self.use_network(images=img, sess=sess)
+          self.q_values = self.policy_net.use_network(images=img)
           action = np.argmax(self.q_values)
-          #print("Action: " + self.action_strings.get(
-            #action))
+          print("Action: " + self.action_strings.get(action))
           # execute action
           self.execute_action(action)
           # stop if line is lost (hopefully never, if
