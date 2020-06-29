@@ -59,14 +59,15 @@ class Node:
       pass
     return self.my_img
 
-  # wait until image stack is full
+  # wait until image stack is full => not necessary anymore because
+  # of image queue?
   def get_stack_of_images(self):
     nr_images = self.img_cnt
     mod_old = -1
     while (self.img_cnt <= (nr_images + self.number_of_images)):
       mod_new = self.img_cnt % self.number_of_images
       if not (mod_new == mod_old):
-        self.img_stack[mod_new][0] = self.my_img
+        self.img_stack[mod_new] = self.my_img
       mod_old = mod_new
     return self.img_stack
 
@@ -79,12 +80,14 @@ class Node:
 
     # global variables
     # images
+    # current image
+    self.my_img = np.zeros(50)
     # next couple of (four) consecutive images
     self.number_of_images = 4
-    self.my_img = np.zeros(50)  # current image
-    self.img_stack = np.zeros(shape=[self.number_of_images, 1,
-                                   len(self.my_img)])
-    self.img_cnt = 0  # number of images received
+    self.img_stack = np.zeros(shape=[self.number_of_images,
+                                     len(self.my_img)])
+    # number of images received
+    self.img_cnt = 0
     # image queue for the last couple of images
     self.my_img_queue = np.zeros(shape=[self.number_of_images,
                                         len(self.my_img)])
@@ -152,16 +155,6 @@ class Node:
     self.sess = tf.compat.v1.Session()  # tensorflow session object
     self.batch_size = 4   # batch size for replay buffer
     self.mini_batch_size = 2    # batch size for neural network
-    # policy network to train on
-    dim_input = np.zeros(shape=[4, 200])
-    self.policy_net = Network.Network(images = dim_input,
-      size_layer1 = 5, size_layer2 = 5, session = self.sess,
-                                      batch_size =
-                                      self.mini_batch_size)
-    # target network to calculate optimal q-values on
-    self.target_net = Network.Network(images = self.img_stack,
-      size_layer1 = 5, size_layer2 = 5, session = self.sess, batch_size =
-                                      self.mini_batch_size)
 
     # publisher to publish on topic /cmd_vel
     self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist,
@@ -434,6 +427,19 @@ class Node:
     # to make sure, that the first image received is a proper one
     self.get_stack_of_images()
 
+    # initialize networks
+    # policy network to train on
+    self.policy_net = Network.Network(images=self.img_stack,
+                                      size_layer1=5, size_layer2=5,
+                                      session=self.sess,
+                                      batch_size=
+                                      self.mini_batch_size)
+    # target network to calculate optimal q-values on
+    self.target_net = Network.Network(images=self.img_stack,
+                                      size_layer1=5, size_layer2=5,
+                                      session=self.sess, batch_size=
+                                      self.mini_batch_size)
+
 
     # important steps of the algorithm
     try:
@@ -539,7 +545,7 @@ class Node:
           for i in range(len(buffer_examples)):
             state = buffer_examples[i].get(
               "state")
-            state = state.flatten()
+            #state = state.flatten()
             print("state[i] = " + str(state))
             buffer_images.append(state)
 

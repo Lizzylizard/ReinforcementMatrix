@@ -9,20 +9,10 @@ from tensorflow import keras
 
 class Network():
   # constructor
-  def __init__(self, images, size_layer1, size_layer2, session,
+  def __init__(self, images, size_layer1, session,
                batch_size):
     self.batch_size = batch_size
     self.sess = session
-    # shape input layer
-    # print("Shape of images = " + str(np.shape(images)))
-    dim0 = batch_size
-    # print("dim0 = " + str(dim0))
-    # dim1 = len(images[0])
-    # print("dim1 = " + str(dim1))
-    dim2 = len(images[0])
-    print("dim2 = " + str(dim2))
-    size_input = len(images) * dim2
-    # print("input size = " + str(size_input))
 
     # shape output layer
     # print("Shape targets = " + str(np.shape(targets)))
