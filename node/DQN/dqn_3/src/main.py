@@ -50,7 +50,7 @@ class Node:
 
     # count the received images
     self.img_cnt += 1
-    print("Number of images = " + str(self.img_cnt))
+    print("Image number " + str(self.img_cnt))
 
   # wait until a new image is received
   def get_image(self):
@@ -88,9 +88,6 @@ class Node:
                                      len(self.my_img)])
     # number of images received
     self.img_cnt = 0
-    # image queue for the last couple of images
-    self.my_img_queue = np.zeros(shape=[self.number_of_images,
-                                        len(self.my_img)])
 
     self.vel_msg = Twist()  # message to post on topic /cmd_vel
     self.start = time.time()  # starting time
@@ -114,7 +111,7 @@ class Node:
 
     # initial values
     self.max_episodes = 200
-    self.speed = 10.0
+    self.speed = 3.0
 
     # deviation from speed to turn the robot to the left or to the
     # right
@@ -149,12 +146,21 @@ class Node:
     }
 
     # neural network
-    # target vector
-    #self.targets = np.zeros(shape=[1, (len(self.action_strings)-1)],
-                            #dtype='float64')
     self.sess = tf.compat.v1.Session()  # tensorflow session object
     self.batch_size = 4   # batch size for replay buffer
     self.mini_batch_size = 2    # batch size for neural network
+    # image queue for the last couple of images
+    self.my_img_queue = np.zeros(shape=[self.batch_size,
+                                        len(self.my_img)])
+    # initialize networks
+    # policy network to train on
+    self.policy_net = Network.Network(size_layer1=5,
+                                      session=self.sess,
+                                      batch_size=self.mini_batch_size)
+    # target network to calculate optimal q-values on
+    self.target_net = Network.Network(size_layer1=5,
+                                      session=self.sess,
+                                      batch_size=self.mini_batch_size)
 
     # publisher to publish on topic /cmd_vel
     self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist,
@@ -323,6 +329,16 @@ class Node:
   def choose_random_starting_position(self):
     # choose random number between 0 and 1
     rand = random.uniform(0, 1)
+    if (rand > (0.5)):
+        # sharp left curve
+        self.x_position = 0.930205421421
+        self.y_position = -5.77364575559
+        self.z_position = -0.0301045554742
+    else:
+        # sharp right curve
+        self.x_position = 1.1291257432
+        self.y_position = -3.37940826549
+        self.z_position = -0.0298815752691
     '''
     if(rand <= (1.0/5.0)):
         #initial starting position
@@ -334,12 +350,12 @@ class Node:
         self.x_position = -0.9032014349
         self.y_position = -6.22487658223
         self.z_position = -0.0298790967155
-    elif (rand > (2.0 / 5.0) and rand <= (3.0 / 5.0)):
+    if (rand > (2.0 / 5.0) and rand <= (3.0 / 5.0)):
         # sharp left curve
         self.x_position = 0.930205421421
         self.y_position = -5.77364575559
         self.z_position = -0.0301045554742
-    elif (rand > (5.0 / 5.0) and rand <= (4.0 / 5.0)):
+    else (rand > (5.0 / 5.0) and rand <= (4.0 / 5.0)):
         # sharp right curve
         self.x_position = 1.1291257432
         self.y_position = -3.37940826549
@@ -349,11 +365,11 @@ class Node:
         self.x_position = 0.4132014349
         self.y_position = -2.89940826549
         self.z_position = -0.0298790967155
-    '''
     # straight line (long)
     self.x_position = -0.9032014349
     self.y_position = -6.22487658223
     self.z_position = -0.0298790967155
+    '''
 
 
   # if user pressed ctrl+c --> stop the robot
@@ -417,28 +433,10 @@ class Node:
     self.curr_action = -1
     self.last_state = -1000
 
-    # images
-    # image for current state
-    img = np.zeros(shape=[self.number_of_images, 1, 50])
-    # image for last state
-    last_img = np.zeros(shape=[self.number_of_images, 1, 50])
-
     # wait for the first couple of images without doing anything
     # to make sure, that the first image received is a proper one
-    self.get_stack_of_images()
-
-    # initialize networks
-    # policy network to train on
-    self.policy_net = Network.Network(images=self.img_stack,
-                                      size_layer1=5, size_layer2=5,
-                                      session=self.sess,
-                                      batch_size=
-                                      self.mini_batch_size)
-    # target network to calculate optimal q-values on
-    self.target_net = Network.Network(images=self.img_stack,
-                                      size_layer1=5, size_layer2=5,
-                                      session=self.sess, batch_size=
-                                      self.mini_batch_size)
+    used_images = self.get_stack_of_images()
+    my_img = self.get_image()
 
 
     # important steps of the algorithm
@@ -451,29 +449,30 @@ class Node:
           print("Learning")
           # wait for next image
           # img = self.get_stack_of_images()
-          last_img = np.copy(img)
+          last_img = np.copy(my_img)
           my_img = self.get_image()
           my_img_queue = np.copy(self.my_img_queue)
-          img[0] = my_img
           # print("Shape of image = " + str(np.shape(img)))
 
-          # save last state, get new state and calculate reward
+          # save last state
           self.last_state = self.curr_state
-          print("Last state: " + str(
-            self.state_strings.get(self.last_state)))
+          print("Last state: " + str(self.state_strings.get(
+            self.last_state)))
+          # get new / current state
           self.curr_state = self.bot.get_state(my_img)
-          # stop robot immediatley, but still do calculations
+          # stop robot immediatley if state is 'line lost', but still
+          # do calculations
           if(self.curr_state == self.lost_line):
             self.stopRobot()
-
           print("Current state: " + str(self.state_strings.get(
              self.curr_state)))
+          #calculate reward
           reward = self.bot.calculate_reward(self.curr_state)
           print("Reward: " + str(reward))
 
           # store experience
           my_img_queue = my_img_queue.flatten()
-          self.memory.store_experience(my_img_queue, last_img,
+          self.memory.store_experience(my_img, last_img,
                                        self.curr_action, reward)
 
           # update target network
@@ -526,35 +525,43 @@ class Node:
             # print("Q Values = " + str(self.q_values))
           '''
 
+          # later:
           # get optimal q-values for current state via the target
           # network
-          # for later use:
           # targets = self.target_net.use_network(images=last_img)
-          # current use: keep it simple
+          # current: keep it simple
+          # put reward at targets[1, current action] and 0 else
           targets = np.zeros(shape=[1, 7])
           for i in range(len(targets[0])):
             targets[0, i] = 0
           if not(self.curr_action == -1):
-            targets[0, self.curr_action] = reward  # 1
+            targets[0, self.curr_action] = reward
 
           # get self.batch_size number of examples from buffer
-          buffer_examples = self.memory.get_random_experience(
-            self.batch_size)
+          buffer_examples = self.memory.get_random_experience(1)
           # print("Buffer = " + str(buffer_examples))
-          buffer_images = []
-          for i in range(len(buffer_examples)):
-            state = buffer_examples[i].get(
-              "state")
-            #state = state.flatten()
-            print("state[i] = " + str(state))
-            buffer_images.append(state)
+          # we only have to feed the images representing the
+          # starting state into the network, therefore extract
+          # those from the buffer_examples dictionary
+          buffer_images = buffer_examples[0].get("state")
 
-          print("shape buffer_images = " + str(np.shape(buffer_images)))
-
-          # update policy network with optimal q-values
-          output = self.policy_net.update_weights(
+          # update policy network and get optimal q-values as a result
+          # every twentieth step use images from memory
+          # else use current images
+          if (step_counter % 20 == 1):
+            # what should the targets be here??
+            # how do I calculate the reward??
+            print("Memory")
+            output = self.policy_net.update_weights(
             images=buffer_images, epochs=1, targets=targets,
             learning_rate=0.01)
+            used_images = buffer_images
+          else:
+            print("Real life")
+            output = self.policy_net.update_weights(
+            images=my_img, epochs=1, targets=targets,
+            learning_rate=0.01)
+            used_images = my_img_queue
 
           # print("\n\nOutput of DNN = " + str(output))
           self.q_values = output
@@ -591,7 +598,7 @@ class Node:
             # choose best action by using the NN with the current
             # image, not updating it
             self.q_values = self.policy_net.use_network(
-              images=my_img_queue)
+              images=my_img, targets=targets)
             action = np.argmax(self.q_values)
             print("Action: " + self.action_strings.get(action))
             self.execute_action(action)
@@ -618,11 +625,19 @@ class Node:
 
           print("Driving!")
           # wait for new image
-          img[0] = self.get_image()
+          my_img = self.get_image()
           # choose best next action from neural network
           # action = self.bot.drive(img)
           # use NN, do NOT update it
-          self.q_values = self.policy_net.use_network(images=my_img_queue)
+          targets = np.zeros(shape=[1, 7])
+          for i in range(len(targets[0])):
+            targets[0, i] = 0
+          if not(self.curr_action == -1):
+            targets[0, self.curr_action] = reward
+
+          self.q_values = self.policy_net.use_network(
+            images=my_img, targets = targets)
+
           action = np.argmax(self.q_values)
           print("Action: " + self.action_strings.get(action))
           # execute action

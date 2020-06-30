@@ -31,7 +31,7 @@ class Memory():
 
   def get_random_experience(self, batch_size):
     experience = []
-    print("self.count = " + str(self.count))
+    #print("self.count = " + str(self.count))
     if(self.count > batch_size and self.count >= len(self.experiences)):
       rand = random.randint(low=0, high=len(self.experiences),
                                 size=batch_size)
@@ -46,6 +46,15 @@ class Memory():
     for i in range(len(rand)):
       # print("rand[i] = " + str(rand[i]))
       experience.append(self.experiences[rand[i]])
-    print("Batch size = " + str(batch_size))
-    print("Experience array = \n" + str(experience))
+
+    # for easier use of tensorflow ALWAYS return number of
+    # experiences = batch size
+    # if not enough experiences there, just append the last one
+    # until full
+    last_one = experience[-1]
+    while(len(experience) < batch_size):
+      experience.append(last_one)
+
+    #print("Batch size = " + str(batch_size))
+    #print("Experience array = \n" + str(experience))
     return experience
