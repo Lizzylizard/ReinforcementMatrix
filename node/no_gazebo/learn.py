@@ -33,7 +33,7 @@ a0, a1, a3, W1, W3, b1, b3, input, targets_p = None, None, None, \
 sess = tf.compat.v1.Session()
 
 def loadImage(random):
-  path = '/home/elisabeth/Dokumente/GazeboImages/v3-learning/img'
+  path = 'GazeboImages/v3-learning/img'
   path += str(random)
   path += '.jpg'
   img = cv.imread(path)
@@ -278,7 +278,7 @@ def get_best_action(output):
 ######################################################################
 
 def get_next_image(cnt):
-  path = '/home/elisabeth/Dokumente/GazeboImages/v2-fullRound/img'
+  path = 'GazeboImages/v2-fullRound/img'
   cnt += 1
   path += str(cnt)
   path += '.jpg'
