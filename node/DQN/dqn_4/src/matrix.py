@@ -57,7 +57,7 @@ class Bot:
   def calculate_reward(self, curr_state):
     if (curr_state == 3):
       # best case: middle
-      reward = -1
+      reward = 0
     elif (curr_state == 2):
       # second best case: slightly left
       reward = -2

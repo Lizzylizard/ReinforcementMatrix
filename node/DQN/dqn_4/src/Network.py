@@ -16,7 +16,7 @@ class Network():
     # input layer
     # input is state
     # state is a scalar number (0 to 7)
-    self.input = tf.compat.v1.placeholder(tf.float64, [1,1])
+    self.input = tf.compat.v1.placeholder(tf.float64, [None,1])
     self.a0 = self.input
 
     # output
@@ -25,7 +25,7 @@ class Network():
     out_1 = 7
 
     # targets
-    self.targets_p = tf.compat.v1.placeholder(tf.float64, [out_0,
+    self.targets_p = tf.compat.v1.placeholder(tf.float64, [None,
                                                            out_1],
                                               name="targets")
 
@@ -127,22 +127,33 @@ class Network():
   # use network to drive, do not update weights anymore
   # returns q-values
   def use_network(self, state):
-    output = self.sess.run(self.a3, feed_dict={self.input: state})
+    output = self.sess.run(self.a3, feed_dict={
+      self.input: state})
     return output
 
   # copy all of the layers, weights and biases to the target network
   def copy(self, target_net):
+    # sess
     target_net.sess = self.list[0]
+    # input
     target_net.input = self.list[1]
+    # targets_p
     target_net.targets_p = self.list[2]
+    # a0
     target_net.a0 = self.list[3]
+    # a1
     target_net.a1 = self.list[4]
     #target_net.a2 = self.list[5]
+    # a3 = output
     target_net.a3 = self.list[5]
+    # W1
     target_net.W1 = self.list[6]
     #target_net.W2 = self.list[9]
+    # W3
     target_net.W3 = self.list[7]
+    # b1
     target_net.b1 = self.list[8]
     #target_net.b2 = self.list[12]
+    # b2
     target_net.b3 = self.list[9]
     return target_net

@@ -101,6 +101,12 @@ class Node:
     self.policy_net = Network.Network(mini_batch_size=1,
                                       size_layer1=5,
                                       session=self.sess)
+      # target network to calculate 'optimal' q-values
+    self.target_net = Network.Network(mini_batch_size=1,
+                                      size_layer1=5,
+                                      session=self.sess)
+      # copy weights and layers from the policy net into the target net
+    self.target_net = self.policy_net.copy(self.target_net)
 
     # stack of the last couple of images
     self.image_stack = np.zeros(shape=[
@@ -121,7 +127,8 @@ class Node:
     self.curr_action = -1
 
     # last state (initially negative)
-    self.last_state = -1000
+    self.last_state = np.zeros(shape=[1, 1])
+    self.last_state[0, 0] = -1000
 
     # starting coordinates of the robot
     self.x_position = -0.9032014349
@@ -129,8 +136,8 @@ class Node:
     self.z_position = -0.0298790967155
 
     # initial values
-    self.max_episodes = 50
-    self.speed = 3.0
+    self.max_episodes = 150
+    self.speed = 7.0
 
     # deviation from speed to turn the robot to the left or to the
     # right
@@ -329,6 +336,11 @@ class Node:
   # At the moment: reset to same starting position
   # choose one of five given positions randomly
   def choose_random_starting_position(self):
+    # sharp right curve
+    self.x_position = 1.1291257432
+    self.y_position = -3.37940826549
+    self.z_position = -0.0298815752691
+    '''
     # choose random number between 0 and 1
     rand = random.uniform(0, 1)
     if (rand > (0.5)):
@@ -341,6 +353,7 @@ class Node:
         self.x_position = 0.4132014349
         self.y_position = -2.89940826549
         self.z_position = -0.0298790967155
+    '''
     '''
     if(rand <= (1.0/5.0)):
         #initial starting position
@@ -415,26 +428,63 @@ class Node:
   #   reward where index = action
   #   0 else
   def fill_targets(self, targets, action, reward):
-    for i in range(len(targets)):
+    for i in range(len(targets[0])):
       targets[0, i] = 0
     if not (action == -1):
       targets[0, action] = reward
     return targets
 
   # get random (batch of) experiences and learn with it
+  # use 'simple' targets for optimal q-values
   def use_memory(self, targets):
+    '''
+    memory_batch = self.memory.get_random_experience(
+      batch_size=self.batch_size)
+    mem_state = np.zeros(shape=[len(memory_batch), 1])
+    mem_action = np.zeros(shape=[len(memory_batch), 1])
+    mem_reward = np.zeros(shape=[len(memory_batch), 1])
+    my_targets = np.zeros(shape=[len(memory_batch), 7])
+    for i in range(len(memory_batch)):
+      mem_state[i] = memory_batch[i].get("last_state")
+      mem_action[i] = memory_batch[i].get("action")
+      mem_reward[i] = memory_batch[i].get("reward")
+      print("mem action = " + str(mem_action[i, 0]))
+      print("mem reward = " + str(mem_reward[i, 0]))
+      curr_targets = self.fill_targets(targets, mem_action[i, 0],
+                                     mem_reward[i, 0])[0]
+      print("curr targets = " + str(curr_targets))
+      my_targets[i] = np.copy(curr_targets)
+      print("my targets = " + str(my_targets))
+    '''
     memory_batch = self.memory.get_random_experience(
       batch_size=1)
-    mem_state = memory_batch[0].get("state")
-    mem_action = memory_batch[0].get("action")
-    mem_reward = memory_batch[0].get("reward")
-    my_targets = self.fill_targets(targets, mem_action, mem_reward)
+    for i in range(len(memory_batch)):
+      mem_last_state = memory_batch[i].get("last_state")
+      mem_action = memory_batch[i].get("action")
+      mem_reward = memory_batch[i].get("reward")
+      my_targets = self.fill_targets(targets, mem_action, mem_reward)
+      _ = self.policy_net.update_weights(state=mem_last_state,
+                                              epochs=1,
+                                              targets=my_targets,
+                                              learning_rate=0.001)
+
+  # get random (batch of) experiences and learn with it
+  # use target network to get optimal q-values
+  def use_memory_tn(self):
+    memory_batch = self.memory.get_random_experience(
+      batch_size=self.batch_size)
+    mem_state = np.zeros(shape=[len(memory_batch), 1])
+    #print("Mem state shape = " + str(np.shape(mem_state)))
+    my_targets = np.zeros(shape=[len(memory_batch), 7])
+    for i in range(len(memory_batch)):
+      mem_state[i] = memory_batch[i].get("state")
+    #print("Mem state filled shape = " + str(np.shape(mem_state)))
+    my_targets = self.target_net.use_network(mem_state)
     output = self.policy_net.update_weights(state=mem_state,
                                             epochs=1,
                                             targets=my_targets,
                                             learning_rate=0.001)
     return output
-
 
   # main program
   def reinf_main(self):
@@ -454,7 +504,7 @@ class Node:
 
     # variables deciding whether to explore or to exploit
     exploration_prob = 0.99
-    decay_rate = 0.001
+    decay_rate = 0.01
     min_exploration_rate = 0.01
     max_exploration_rate = 1
 
@@ -468,7 +518,9 @@ class Node:
     # current state and action are negative before starting
     self.curr_state = -1
     self.curr_action = -1
-    self.last_state = -1000
+    self.last_state[0, 0] = -1000
+    self.array_state = np.zeros(shape=[1, 1])
+    self.array_state[0, 0] = self.curr_state
 
     # wait for image
 
@@ -500,12 +552,11 @@ class Node:
           my_img = self.get_image()
 
           # save last state
-          self.last_state = self.curr_state
+          self.last_state = np.copy(self.array_state)
           print("Last state: " + str(self.state_strings.get(
-            self.last_state)))
+            self.last_state[0, 0])))
           # get new / current state
           self.curr_state = self.bot.get_state(my_img)
-          self.array_state = np.zeros(shape=[1, 1])
           self.array_state[0, 0] = self.curr_state
           # stop robot immediatley if state is 'line lost', but still
           # do calculations
@@ -519,32 +570,42 @@ class Node:
 
           # store experience
           self.memory.store_experience(state=self.array_state,
-                                       last_state=last_img,
+                                       last_state=self.last_state,
                                        action=self.curr_action,
                                        reward=reward)
 
-          # get targets
-          targets = np.zeros(shape=[1, (len(self.action_strings)-1)])
-          targets = self.fill_targets(targets, self.curr_action,
+          # get targets simple way
+          self.targets = np.zeros(shape=[1, (len(
+            self.action_strings)-1)])
+          self.targets = self.fill_targets(self.targets,
+                                           self.curr_action,
                                       reward)
 
-          # update policy network and get optimal q-values as a result
-          # every twentieth step use states from memory
-          if(step_counter % 5 == 1):
-            print("Memory")
-            self.q_values = self.use_memory(targets)
-          # else use current state
-          else:
-            self.q_values = self.policy_net.update_weights(
-              state=self.array_state, epochs=1, targets=targets,
-              learning_rate=0.001)
-
+          # get targets via target_network
           '''
-          # update weights and get q-values for current state
+          self.targets_tn = self.target_net.use_network(
+            state=self.array_state)
+          '''
+
+          # update target net every 20th step
+          if(step_counter % 20 == 0):
+            self.target_net = self.policy_net.copy(self.target_net)
+
+          # use states from memory to update policy network in
+          # order to not 'forget' previously learned things
+          self.use_memory(self.targets)
+          #self.q_values = self.use_memory_tn()
+
+          # update policy network with current state and get optimal
+          # q-values as a result
+          '''
           self.q_values = self.policy_net.update_weights(
-            state = self.array_state, epochs=1, targets=targets,
+            state=self.last_state, epochs=1,
+            targets=self.targets,
             learning_rate=0.001)
           '''
+
+          # self.q_values = self.q_values[-1]
 
           # begin a new episode if robot lost the line
           if (self.curr_state == self.lost_line):
@@ -559,15 +620,19 @@ class Node:
             # going on
             # self.bot.printMatrix(time.time())
             print("-" * 100)
+            # skip the next image
+            self.get_image()
             # skip the next steps and start a new loop
             continue
 
           # get the next action
           # if exploring: choose random action
+          print("Exploration prob = " + str(exploration_prob))
           if (self.epsilon_greedy(exploration_prob)):
             print("Exploring")
             # take random action
-            action = np.argmax(self.q_values)
+            # action = np.argmax(self.q_values)
+            action = np.random.randint(low=0, high=7)
             print("Action: " + self.action_strings.get(action))
             self.execute_action(action)
             self.curr_action = action
