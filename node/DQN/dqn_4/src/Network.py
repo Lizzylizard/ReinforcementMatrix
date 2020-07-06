@@ -57,8 +57,7 @@ class Network():
       learning_rate=0.001)
     # var_list = [self.W1, self.W2, self.W3, self.b1, self.b2, self.b3]
     var_list = [self.W1, self.W3, self.b1, self.b3]
-    self.updateOp = self.sgdObj.minimize(self.loss
-                                         )
+    self.updateOp = self.sgdObj.minimize(self.loss)
 
     ### until here!
     # initialize

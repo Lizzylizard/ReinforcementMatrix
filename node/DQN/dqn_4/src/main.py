@@ -136,7 +136,7 @@ class Node:
     self.z_position = -0.0298790967155
 
     # initial values
-    self.max_episodes = 150
+    self.max_episodes = 500
     self.speed = 7.0
 
     # deviation from speed to turn the robot to the left or to the
@@ -336,10 +336,10 @@ class Node:
   # At the moment: reset to same starting position
   # choose one of five given positions randomly
   def choose_random_starting_position(self):
-    # sharp right curve
-    self.x_position = 1.1291257432
-    self.y_position = -3.37940826549
-    self.z_position = -0.0298815752691
+    # straight line going into right curve
+    self.x_position = 0.4132014349
+    self.y_position = -2.89940826549
+    self.z_position = -0.0298790967155
     '''
     # choose random number between 0 and 1
     rand = random.uniform(0, 1)
@@ -414,16 +414,6 @@ class Node:
       self.explorationMode = False
       return False
 
-  # fill targets weirdly
-  #   reward where index = action
-  #   0 else
-  def fill_targets_weird(self, targets, action, reward, sample_no):
-    for i in range(len(targets[sample_no])):
-      targets[sample_no, i] = 0
-    if not (action == -1):
-      targets[sample_no, action] = reward
-    return targets
-
   # fill targets
   #   reward where index = action
   #   0 else
@@ -486,6 +476,98 @@ class Node:
                                             learning_rate=0.001)
     return output
 
+  # get current state and reward
+  def get_robot_state(self, my_img):
+    # get new / current state
+    self.curr_state = self.bot.get_state(my_img)
+    self.array_state[0, 0] = self.curr_state
+    print("Current state: " + str(self.state_strings.get(
+      self.curr_state)))
+
+    # stop robot immediatley if state is 'line lost', but still
+    # do calculations
+    if (self.curr_state == self.lost_line):
+      self.stopRobot()
+
+    # calculate reward
+    reward = self.bot.calculate_reward(self.curr_state)
+    print("Reward: " + str(reward))
+    
+    return self.curr_state, self.array_state, reward
+
+  # stop robot, reset environment and increase episode counter
+  def begin_new_episode(self, episode_counter):
+    # stop robot
+    self.stopRobot()
+    # set robot back to starting position
+    self.reset_environment()
+    # episode is done => increase counter
+    episode_counter += 1
+    print("NEW EPISODE: ", episode_counter)
+    # print current q-matrix to see what's
+    # going on
+    # self.bot.printMatrix(time.time())
+    print("-" * 100)
+    # skip the next image
+    self.get_image()
+    return episode_counter
+
+  # select and execute action
+  def get_next_action(self, exploration_prob):
+    # if exploring: choose random action
+    print("Exploration prob = " + str(exploration_prob))
+    if (self.epsilon_greedy(exploration_prob)):
+      print("Exploring")
+      # take random action
+      # action = np.argmax(self.q_values)
+      action = np.random.randint(low=0, high=7)
+      print("Action: " + self.action_strings.get(action))
+      self.execute_action(action)
+      self.curr_action = action
+    # if exploiting: choose best action
+    else:
+      print("Exploiting")
+      # get q-values by feeding images to the DQN
+      # without updating its weights
+      self.q_values = self.policy_net.use_network(
+        state=self.array_state)
+      # choose action by selecting highest q -value
+      action = np.argmax(self.q_values)
+      print("Action: " + self.action_strings.get(action))
+      self.execute_action(action)
+      self.curr_action = action
+      return self.curr_action
+
+  # use trained network to drive
+  def drive(self, episode_counter):
+    # first time in else: save time that robot
+    # spent learning
+    if (episode_counter == self.max_episodes + 1):
+      self.learning_time = time.time()
+
+    # wait for new image(s)
+    # my_img_stack = self.get_stack_of_images()
+    my_img = self.get_image()
+    # get new / current state
+    self.curr_state = self.bot.get_state(my_img)
+    self.array_state = np.zeros(shape=[1, 1])
+    self.array_state[0, 0] = self.curr_state
+
+    # get q-values by feeding images to the DQN
+    # without updating its weights
+    self.q_values = self.policy_net.use_network(
+      state=self.array_state)
+    # choose action by selecting highest q -value
+    action = np.argmax(self.q_values)
+    print("Action: " + self.action_strings.get(action))
+
+    # execute action
+    self.execute_action(action)
+    # stop if line is lost (hopefully never, if
+    # robot learned properly)
+    if (action == self.stop_action):
+      self.reset_environment()
+
   # main program
   def reinf_main(self):
     # tell program what to do on shutdown (user presses ctrl+c)
@@ -522,51 +604,23 @@ class Node:
     self.array_state = np.zeros(shape=[1, 1])
     self.array_state[0, 0] = self.curr_state
 
-    # wait for image
-
-    # last image
-    last_img = np.zeros(len(self.my_img))
-    copy = np.zeros(len(self.my_img))
-
-    # important steps of the algorithm
+    # main loop
     try:
-      rate = rospy.Rate(20)
-      # main loop
       while not rospy.is_shutdown():
         # reinforcement learning
         if (episode_counter <= self.max_episodes):
           print("Learning")
           # wait for next image(s)
-          '''
-          last_img = copy
-          my_img_stack = self.get_stack_of_images()
-          print("stack of images = \n" +str(my_img_stack))
-          my_img = np.zeros(shape=[1, len(self.my_img)])
-          all_last_images = my_img_stack[-1]
-          index = len(self.my_img)*(self.images_per_memory-1)
-          my_img[0] = all_last_images[index:]
-          print("last image = \n" +str(my_img))
-          copy = np.copy(my_img)
-          # print("Shape of image = " + str(np.shape(img)))
-          '''
           my_img = self.get_image()
 
           # save last state
           self.last_state = np.copy(self.array_state)
           print("Last state: " + str(self.state_strings.get(
             self.last_state[0, 0])))
-          # get new / current state
-          self.curr_state = self.bot.get_state(my_img)
-          self.array_state[0, 0] = self.curr_state
-          # stop robot immediatley if state is 'line lost', but still
-          # do calculations
-          if(self.curr_state == self.lost_line):
-            self.stopRobot()
-          print("Current state: " + str(self.state_strings.get(
-             self.curr_state)))
-          #calculate reward
-          reward = self.bot.calculate_reward(self.curr_state)
-          print("Reward: " + str(reward))
+
+          # get state and reward
+          self.curr_state, self.array_state, reward = \
+            self.get_robot_state(my_img)
 
           # store experience
           self.memory.store_experience(state=self.array_state,
@@ -594,59 +648,15 @@ class Node:
           # use states from memory to update policy network in
           # order to not 'forget' previously learned things
           self.use_memory(self.targets)
-          #self.q_values = self.use_memory_tn()
-
-          # update policy network with current state and get optimal
-          # q-values as a result
-          '''
-          self.q_values = self.policy_net.update_weights(
-            state=self.last_state, epochs=1,
-            targets=self.targets,
-            learning_rate=0.001)
-          '''
-
-          # self.q_values = self.q_values[-1]
 
           # begin a new episode if robot lost the line
           if (self.curr_state == self.lost_line):
-            # stop robot
-            self.stopRobot()
-            # set robot back to starting position
-            self.reset_environment()
-            # episode is done => increase counter
-            episode_counter += 1
-            print("NEW EPISODE: ", episode_counter)
-            # print current q-matrix to see what's
-            # going on
-            # self.bot.printMatrix(time.time())
-            print("-" * 100)
-            # skip the next image
-            self.get_image()
+            episode_counter = self.begin_new_episode(episode_counter)
             # skip the next steps and start a new loop
             continue
 
           # get the next action
-          # if exploring: choose random action
-          print("Exploration prob = " + str(exploration_prob))
-          if (self.epsilon_greedy(exploration_prob)):
-            print("Exploring")
-            # take random action
-            # action = np.argmax(self.q_values)
-            action = np.random.randint(low=0, high=7)
-            print("Action: " + self.action_strings.get(action))
-            self.execute_action(action)
-            self.curr_action = action
-          # if exploiting: choose best action
-          else:
-            print("Exploiting")
-            # get q-values by feeding images to the DQN
-            # without updating its weights
-            self.q_values = self.policy_net.use_network(state=self.array_state)
-            # choose action by selecting highest q -value
-            action = np.argmax(self.q_values)
-            print("Action: " + self.action_strings.get(action))
-            self.execute_action(action)
-            self.curr_action = action
+          self.curr_action = self.get_next_action(exploration_prob)
 
           # decay the probability of exploring
           exploration_prob = min_exploration_rate + (
@@ -662,34 +672,10 @@ class Node:
 
         # using trained network to drive
         else:
-          # first time in else: save time that robot
-          # spent learning
-          if (episode_counter == self.max_episodes + 1):
-            self.learning_time = time.time()
-
           print("Driving!")
-          # wait for new image(s)
-          # my_img_stack = self.get_stack_of_images()
-          my_img = self.get_image()
-          # get new / current state
-          self.curr_state = self.bot.get_state(my_img)
-          self.array_state = np.zeros(shape=[1, 1])
-          self.array_state[0, 0] = self.curr_state
+          self.drive(episode_counter)
 
-          # get q-values by feeding images to the DQN
-          # without updating its weights
-          self.q_values = self.policy_net.use_network(state = self.array_state)
-          # choose action by selecting highest q -value
-          action = np.argmax(self.q_values)
-          print("Action: " + self.action_strings.get(action))
-
-          # execute action
-          self.execute_action(action)
-          # stop if line is lost (hopefully never, if
-          # robot learned properly)
-          if (action == self.stop_action):
-            self.reset_environment()
-
+        # count taken steps (while cycles)
         step_counter += 1
 
     except rospy.ROSInterruptException:
