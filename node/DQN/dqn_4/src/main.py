@@ -76,12 +76,14 @@ class Node:
     # helper classes
     self.bot = bt.Bot()  # reward + q-matrix
     self.imgHelper = mi.MyImage()  # image processing
-    self.memory = Memory.Memory(100) # replay buffer
+    self.memory = Memory.Memory(1000) # replay buffer
 
     # global variables
     # images
     # current image
     self.my_img = np.zeros(50)
+    # last image
+    self.last_img = np.copy(self.my_img)
     # number of images received in total
     self.img_cnt = 0
     # number of images that will be stored for a single memory sample
@@ -94,7 +96,7 @@ class Node:
     self.mini_batch_size = 2
         # number of examples that will be extracted at once from
         # the memory
-    self.batch_size = 4
+    self.batch_size = 10
       # tensorflow session object
     self.sess = tf.compat.v1.Session()
       # policy network
@@ -136,7 +138,7 @@ class Node:
     self.z_position = -0.0298790967155
 
     # initial values
-    self.max_episodes = 500
+    self.max_episodes = 2000
     self.speed = 7.0
 
     # deviation from speed to turn the robot to the left or to the
@@ -336,10 +338,12 @@ class Node:
   # At the moment: reset to same starting position
   # choose one of five given positions randomly
   def choose_random_starting_position(self):
+    '''
     # straight line going into right curve
     self.x_position = 0.4132014349
     self.y_position = -2.89940826549
     self.z_position = -0.0298790967155
+    '''
     '''
     # choose random number between 0 and 1
     rand = random.uniform(0, 1)
@@ -354,38 +358,55 @@ class Node:
         self.y_position = -2.89940826549
         self.z_position = -0.0298790967155
     '''
-    '''
+    # choose random number between 0 and 1
+    rand = random.uniform(0, 1)
+    #print("rand = " + str(rand))
     if(rand <= (1.0/5.0)):
-        #initial starting position
-        self.x_position = -3.4032014349
-        self.y_position = -6.22487658223
-        self.z_position = -0.0298790967155
-    if (rand > (1.0/5.0) and rand <= (2.0 / 5.0)):
-        # straight line (long) going into left curve
-        self.x_position = -0.9032014349
-        self.y_position = -6.22487658223
-        self.z_position = -0.0298790967155
-    if (rand > (2.0 / 5.0) and rand <= (3.0 / 5.0)):
-        # sharp left curve
-        self.x_position = 0.930205421421
-        self.y_position = -5.77364575559
-        self.z_position = -0.0301045554742
-    else (rand > (5.0 / 5.0) and rand <= (4.0 / 5.0)):
-        # sharp right curve
-        self.x_position = 1.1291257432
-        self.y_position = -3.37940826549
-        self.z_position = -0.0298815752691
+      #initial starting position
+      self.x_position = -3.4032014349
+      self.y_position = -6.22487658223
+      self.z_position = -0.0298790967155
+      #print("case 0")
+    elif (rand > (1.0/5.0) and rand <= (2.0 / 5.0)):
+      # straight line (long) going into left curve
+      self.x_position = -0.9032014349
+      self.y_position = -6.22487658223
+      self.z_position = -0.0298790967155
+      #print("case 1")
+    elif (rand > (2.0 / 5.0) and rand <= (3.0 / 5.0)):
+      # sharp left curve
+      self.x_position = 0.930205421421
+      self.y_position = -5.77364575559
+      self.z_position = -0.0301045554742
+      #print("case 2")
+    elif (rand > (3.0 / 5.0) and rand <= (4.0 / 5.0)):
+      # sharp right curve
+      self.x_position = 1.1291257432
+      self.y_position = -3.37940826549
+      self.z_position = -0.0298815752691
+      #print("case 3")
     else:
-        # straight line going into right curve
-        self.x_position = 0.4132014349
-        self.y_position = -2.89940826549
-        self.z_position = -0.0298790967155
-    # straight line (long)
-    self.x_position = -0.9032014349
-    self.y_position = -6.22487658223
-    self.z_position = -0.0298790967155
-    '''
+      # straight line going into right curve
+      self.x_position = 0.4132014349
+      self.y_position = -2.89940826549
+      self.z_position = -0.0298790967155
+      #print("case 4")
 
+  ######################################### QUELLE ##########################################
+  '''
+  https://answers.ros.org/question/261782/how-to-use-getmodelstate-service-from-gazebo-in-python/
+  '''
+
+  def get_position(self):
+    model_coordinates = rospy.ServiceProxy('/gazebo/get_model_state',
+                                           GetModelState)
+    object_coordinates = model_coordinates("three_pi", "")
+    x_position = object_coordinates.pose.position.x
+    y_position = object_coordinates.pose.position.y
+    z_position = object_coordinates.pose.position.z
+    return x_position, y_position, z_position
+
+  ###########################################################################################
 
   # if user pressed ctrl+c --> stop the robot
   def shutdown(self):
@@ -396,7 +417,10 @@ class Node:
 
   # puts robot back to starting position
   def reset_environment(self):
+    # select position
     self.choose_random_starting_position()
+
+    # set robot to it
     self.set_position(self.x_position, self.y_position,
                       self.z_position)
 
@@ -427,54 +451,17 @@ class Node:
   # get random (batch of) experiences and learn with it
   # use 'simple' targets for optimal q-values
   def use_memory(self, targets):
-    '''
     memory_batch = self.memory.get_random_experience(
       batch_size=self.batch_size)
-    mem_state = np.zeros(shape=[len(memory_batch), 1])
-    mem_action = np.zeros(shape=[len(memory_batch), 1])
-    mem_reward = np.zeros(shape=[len(memory_batch), 1])
-    my_targets = np.zeros(shape=[len(memory_batch), 7])
-    for i in range(len(memory_batch)):
-      mem_state[i] = memory_batch[i].get("last_state")
-      mem_action[i] = memory_batch[i].get("action")
-      mem_reward[i] = memory_batch[i].get("reward")
-      print("mem action = " + str(mem_action[i, 0]))
-      print("mem reward = " + str(mem_reward[i, 0]))
-      curr_targets = self.fill_targets(targets, mem_action[i, 0],
-                                     mem_reward[i, 0])[0]
-      print("curr targets = " + str(curr_targets))
-      my_targets[i] = np.copy(curr_targets)
-      print("my targets = " + str(my_targets))
-    '''
-    memory_batch = self.memory.get_random_experience(
-      batch_size=1)
     for i in range(len(memory_batch)):
       mem_last_state = memory_batch[i].get("last_state")
       mem_action = memory_batch[i].get("action")
       mem_reward = memory_batch[i].get("reward")
       my_targets = self.fill_targets(targets, mem_action, mem_reward)
-      _ = self.policy_net.update_weights(state=mem_last_state,
-                                              epochs=1,
-                                              targets=my_targets,
-                                              learning_rate=0.001)
-
-  # get random (batch of) experiences and learn with it
-  # use target network to get optimal q-values
-  def use_memory_tn(self):
-    memory_batch = self.memory.get_random_experience(
-      batch_size=self.batch_size)
-    mem_state = np.zeros(shape=[len(memory_batch), 1])
-    #print("Mem state shape = " + str(np.shape(mem_state)))
-    my_targets = np.zeros(shape=[len(memory_batch), 7])
-    for i in range(len(memory_batch)):
-      mem_state[i] = memory_batch[i].get("state")
-    #print("Mem state filled shape = " + str(np.shape(mem_state)))
-    my_targets = self.target_net.use_network(mem_state)
-    output = self.policy_net.update_weights(state=mem_state,
-                                            epochs=1,
-                                            targets=my_targets,
-                                            learning_rate=0.001)
-    return output
+      output, loss = self.policy_net.update_weights(
+        state=mem_last_state,targets=my_targets)
+    print("last output y =\n\t" + str(output))
+    print("last loss = " + str(loss))
 
   # get current state and reward
   def get_robot_state(self, my_img):
@@ -492,7 +479,7 @@ class Node:
     # calculate reward
     reward = self.bot.calculate_reward(self.curr_state)
     print("Reward: " + str(reward))
-    
+
     return self.curr_state, self.array_state, reward
 
   # stop robot, reset environment and increase episode counter
@@ -501,8 +488,6 @@ class Node:
     self.stopRobot()
     # set robot back to starting position
     self.reset_environment()
-    # episode is done => increase counter
-    episode_counter += 1
     print("NEW EPISODE: ", episode_counter)
     # print current q-matrix to see what's
     # going on
@@ -510,10 +495,9 @@ class Node:
     print("-" * 100)
     # skip the next image
     self.get_image()
-    return episode_counter
 
   # select and execute action
-  def get_next_action(self, exploration_prob):
+  def get_next_action(self, exploration_prob, my_img):
     # if exploring: choose random action
     print("Exploration prob = " + str(exploration_prob))
     if (self.epsilon_greedy(exploration_prob)):
@@ -530,7 +514,7 @@ class Node:
       # get q-values by feeding images to the DQN
       # without updating its weights
       self.q_values = self.policy_net.use_network(
-        state=self.array_state)
+        state=my_img)
       # choose action by selecting highest q -value
       action = np.argmax(self.q_values)
       print("Action: " + self.action_strings.get(action))
@@ -556,7 +540,7 @@ class Node:
     # get q-values by feeding images to the DQN
     # without updating its weights
     self.q_values = self.policy_net.use_network(
-      state=self.array_state)
+      state=my_img)
     # choose action by selecting highest q -value
     action = np.argmax(self.q_values)
     print("Action: " + self.action_strings.get(action))
@@ -565,7 +549,7 @@ class Node:
     self.execute_action(action)
     # stop if line is lost (hopefully never, if
     # robot learned properly)
-    if (action == self.stop_action):
+    if (self.curr_state == self.lost_line):
       self.reset_environment()
 
   # main program
@@ -591,10 +575,7 @@ class Node:
     max_exploration_rate = 1
 
     # set starting position of the robot
-    # not random, even though the name says differently
-    self.choose_random_starting_position()
-    self.set_position(self.x_position, self.y_position,
-                      self.z_position)
+    self.reset_environment()
 
     # initialize starting parameters
     # current state and action are negative before starting
@@ -604,6 +585,9 @@ class Node:
     self.array_state = np.zeros(shape=[1, 1])
     self.array_state[0, 0] = self.curr_state
 
+    # wait for first image before starting
+    my_img = self.get_image()
+
     # main loop
     try:
       while not rospy.is_shutdown():
@@ -611,7 +595,9 @@ class Node:
         if (episode_counter <= self.max_episodes):
           print("Learning")
           # wait for next image(s)
+          last_img = np.copy(my_img)
           my_img = self.get_image()
+          print("my_img shape = " + str(np.shape(my_img)))
 
           # save last state
           self.last_state = np.copy(self.array_state)
@@ -623,8 +609,8 @@ class Node:
             self.get_robot_state(my_img)
 
           # store experience
-          self.memory.store_experience(state=self.array_state,
-                                       last_state=self.last_state,
+          self.memory.store_experience(state=my_img,
+                                       last_state=last_img,
                                        action=self.curr_action,
                                        reward=reward)
 
@@ -651,12 +637,15 @@ class Node:
 
           # begin a new episode if robot lost the line
           if (self.curr_state == self.lost_line):
-            episode_counter = self.begin_new_episode(episode_counter)
+            self.begin_new_episode(episode_counter)
+            # episode is done => increase counter
+            episode_counter += 1
             # skip the next steps and start a new loop
             continue
 
           # get the next action
-          self.curr_action = self.get_next_action(exploration_prob)
+          self.curr_action = self.get_next_action(exploration_prob,
+                                                  my_img)
 
           # decay the probability of exploring
           exploration_prob = min_exploration_rate + (

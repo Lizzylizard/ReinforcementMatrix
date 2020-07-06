@@ -16,8 +16,9 @@ class Network():
     # input layer
     # input is state
     # state is a scalar number (0 to 7)
-    self.input = tf.compat.v1.placeholder(tf.float64, [None,1])
-    self.a0 = self.input
+    # self.input = tf.compat.v1.placeholder(tf.float64, [None,1])
+    self.input = tf.compat.v1.placeholder(tf.float64, [None, 50])
+    self.a0 = tf.reshape(self.input, (1, -1));
 
     # output
     # output are q_values for the possible actions
@@ -30,7 +31,7 @@ class Network():
                                               name="targets")
 
     # layer 1
-    self.W1 = tf.Variable(np.random.uniform(-0.01, 0.01, [1,
+    self.W1 = tf.Variable(np.random.uniform(-0.01, 0.01, [50,
                                                     size_layer1]))
     self.b1 = tf.Variable(np.random.uniform(-0.01, 0.01,
                                             [size_layer1]),
@@ -63,17 +64,9 @@ class Network():
     # initialize
     self.sess.run(tf.compat.v1.global_variables_initializer())
 
-    # list for easier copying
-    #self.list = [self.sess, self.input, self.targets_p, self.a0,
-                 #self.a1, self.a2, self.a3, self.a4, self.W1,
-                 #self.W2, self.W3, self.b1, self.b2, self.b3]
-    self.list = [self.sess, self.input, self.targets_p, self.a0,
-                 self.a1, self.a3, self.W1, self.W3,
-                 self.b1, self.b3]
-
 
   # update weights depending on the mini batch size
-  def update_weights(self, state, epochs, targets, learning_rate):
+  def update_weights(self, state, targets):
       # run session (generate ouput from input)
       #for i in range(epochs):
       '''
@@ -119,11 +112,11 @@ class Network():
                              feed_dict={ self.input: state,
                                          self.targets_p: targets})
 
-      print("y = \n" + str(output))
-      print("loss = " + str(loss2))
+      #print("y = \n" + str(output))
+      #print("loss = " + str(loss2))
 
       # return q values
-      return output
+      return output, loss2
 
   # use network to drive, do not update weights anymore
   # returns q-values
@@ -134,35 +127,12 @@ class Network():
 
   # copy all of the layers, weights and biases to the target network
   def copy(self, target_net):
-    # DAS KOPIERT NICHT so wie das da stand!!
-    # sess --> OK
-    #target_net.sess = self.list[0]
-    # input --> ok
-    #target_net.input = self.list[1]
-    # targets_p --> ok
-    #target_net.targets_p = self.list[2]
-    # a0 --> nicht ok
-    #target_net.a0 = self.list[3]
-    # a1
-    #target_net.a1 = self.list[4]
-    #target_net.a2 = self.list[5]
-    # a3 = output
-    #target_net.a3 = self.list[5]
-    # W1
-    #target_net.W1 = self.list[6]
     self.sess.run(tf.assign(target_net.W1, self.W1)) ;
-
-    #target_net.W2 = self.list[9]
     # W3
-    #target_net.W3 = self.list[7]
     self.sess.run(tf.assign(target_net.W3, self.W3)) ;
     # b1
-    #target_net.b1 = self.list[8]
     self.sess.run(tf.assign(target_net.b1, self.b1)) ;
-
-    #target_net.b2 = self.list[12]
     # b2
-    #target_net.b3 = self.list[9]
     self.sess.run(tf.assign(target_net.b3, self.b3)) ;
 
     return target_net
