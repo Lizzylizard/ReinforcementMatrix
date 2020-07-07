@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import numpy as np
 from numpy import random
 
@@ -17,7 +17,8 @@ class Network():
     # input is state
     # state is a scalar number (0 to 7)
     # self.input = tf.compat.v1.placeholder(tf.float64, [None,1])
-    self.input = tf.compat.v1.placeholder(tf.float64, [None, 50])
+    self.input = tf.compat.v1.placeholder(tf.float64, [1,
+                                                       mini_batch_size*50])
     self.a0 = tf.reshape(self.input, (1, -1));
 
     # output
@@ -31,7 +32,8 @@ class Network():
                                               name="targets")
 
     # layer 1
-    self.W1 = tf.Variable(np.random.uniform(-0.01, 0.01, [50,
+    self.W1 = tf.Variable(np.random.uniform(-0.01, 0.01,
+                                            [mini_batch_size*50,
                                                     size_layer1]))
     self.b1 = tf.Variable(np.random.uniform(-0.01, 0.01,
                                             [size_layer1]),

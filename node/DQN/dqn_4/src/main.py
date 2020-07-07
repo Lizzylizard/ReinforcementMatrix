@@ -5,6 +5,7 @@ import matrix as bt
 import image as mi
 import Memory
 import Network
+import sound
 
 # import numpy
 import numpy as np
@@ -30,6 +31,7 @@ from gazebo_msgs.srv import SetModelState
 
 # other
 import random
+#import simpleaudio as sa
 
 
 class Node:
@@ -42,22 +44,22 @@ class Node:
 
     # hyperparameters to experiment with
     # number of learning episodes
-    self.max_episodes = 2000
+    self.max_episodes = 1000
     # speed of the robot's wheels
     self.speed = 7.0
-    # number of images that will be stored for a single memory sample
-    self.images_per_memory = 4
     # number of memory samples that will be processed together in
     # one execution of the neural network
     self.mini_batch_size = 2
     # number of examples that will be extracted at once from
     # the memory
-    self.batch_size = 10
+    self.batch_size = 100
 
     # current image
     self.my_img = np.zeros(50)
-    # last image
-    self.last_img = np.copy(self.my_img)
+    # current multiple images
+    self.my_mult_img = np.zeros(shape=[1, self.mini_batch_size*50])
+    # last images
+    self.last_imgs = np.copy(self.my_mult_img)
     # number of images received in total
     self.img_cnt = 0
     # episodes
@@ -98,13 +100,13 @@ class Node:
     # tensorflow session object
     self.sess = tf.compat.v1.Session()
     # policy network
-    self.policy_net = Network.Network(mini_batch_size=1,
+    self.policy_net = Network.Network(mini_batch_size=self.mini_batch_size,
                                       size_layer1=5,
                                       session=self.sess)
     # target array (for simple way)
     self.targets = np.zeros(shape=[1, (len(self.action_strings) - 1)])
     # target network to calculate 'optimal' q-values
-    self.target_net = Network.Network(mini_batch_size=1,
+    self.target_net = Network.Network(mini_batch_size=self.mini_batch_size,
                                       size_layer1=5,
                                       session=self.sess)
     # copy weights and layers from the policy net into the target net
@@ -166,6 +168,31 @@ class Node:
       pass
     # return current image
     return self.my_img
+
+  # receive multiple images
+  def get_multiple_images(self):
+    # helping array
+    images = np.zeros(shape=[self.mini_batch_size, 50])
+    # wait for the next images
+    cnt = 0
+    while (cnt < self.mini_batch_size):
+      images[cnt] = self.get_image()
+      cnt += 1
+    # flatten helping array
+    self.my_mult_img[0] = images.flatten()
+    # return current images
+    return self.my_mult_img
+
+  # get multiple images for network
+  # get single image for state
+  def shape_images(self):
+    # get multiple images for network
+    my_imgs = self.get_multiple_images()
+    # get single image to calculate state
+    my_img = np.zeros(shape=[1, 50])
+    my_img[0] = my_imgs[:, (
+      self.mini_batch_size-1)*50:self.mini_batch_size*50]
+    return my_imgs, my_img
 
   '''-----------------------Driving methods------------------------'''
   # sets fields of Twist variable so robot drives sharp left
@@ -296,7 +323,6 @@ class Node:
 
   # choose one of five given positions randomly
   def choose_random_starting_position(self):
-    '''
     # straight line going into right curve
     self.x_position = 0.4132014349
     self.y_position = -2.89940826549
@@ -335,6 +361,7 @@ class Node:
       self.y_position = -2.89940826549
       self.z_position = -0.0298790967155
       #print("case 4")
+      '''
 
   '''
   https://answers.ros.org/question/261782/how-to-use-getmodelstate-service-from-gazebo-in-python/
@@ -413,7 +440,9 @@ class Node:
 
     # stop robot immediatley if state is 'line lost', but still
     # do calculations
-    if (self.curr_state == self.lost_line):
+    stop_arr=[1, 6, self.lost_line]
+    #if (self.curr_state == self.lost_line):
+    if(self.curr_state in stop_arr):
       self.stopRobot()
 
     # calculate reward
@@ -451,7 +480,7 @@ class Node:
     self.velocity_publisher.publish(vel)
 
   # select and execute action
-  def get_next_action(self, my_img):
+  def get_next_action(self, my_imgs):
     # if exploring: choose random action
     print("Exploration prob = " + str(self.exploration_prob))
     if (self.epsilon_greedy(self.exploration_prob)):
@@ -467,7 +496,7 @@ class Node:
       # get q-values by feeding images to the DQN
       # without updating its weights
       self.q_values = self.policy_net.use_network(
-        state=my_img)
+        state=my_imgs)
       # choose action by selecting highest q -value
       action = np.argmax(self.q_values)
       print("Action: " + self.action_strings.get(action))
@@ -488,17 +517,22 @@ class Node:
     self.vel_msg = self.stop()
     self.velocity_publisher.publish(self.vel_msg)
 
+  '''--------------------Drive without learning--------------------'''
   # use trained network to drive
   def drive(self):
+    # make sound to signal that learning is finished
+    if(self.episode_counter <= self.max_episodes):
+      sound.make_sound()
+
     # wait for new image(s)
-    my_img = self.get_image()
+    my_imgs, my_img = self.shape_images()
     # get new / current state
     self.curr_state = self.bot.get_state(my_img)
 
     # get q-values by feeding images to the DQN
     # without updating its weights
     self.q_values = self.policy_net.use_network(
-      state=my_img)
+      state=my_imgs)
     # choose action by selecting highest q -value
     action = np.argmax(self.q_values)
     print("Action: " + self.action_strings.get(action))
@@ -519,7 +553,7 @@ class Node:
     # set starting position of the robot
     self.reset_environment()
 
-    # wait for first image before starting
+    # wait for first images before starting
     my_img = self.get_image()
 
     # main loop
@@ -530,15 +564,14 @@ class Node:
           print("-" * 100)
           print("Learning")
           # wait for next image(s)
-          last_img = np.copy(my_img)
-          my_img = self.get_image()
+          my_imgs, my_img = self.shape_images()
 
           # get state and reward
           self.curr_state, reward = self.get_robot_state(my_img)
 
           # store experience
-          self.memory.store_experience(state=my_img,
-                                       last_state=last_img,
+          self.memory.store_experience(state=my_imgs,
+                                       last_state=self.last_imgs,
                                        action=self.curr_action,
                                        reward=reward)
 
@@ -569,7 +602,10 @@ class Node:
             continue
 
           # get the next action
-          self.curr_action = self.get_next_action(my_img)
+          self.curr_action = self.get_next_action(my_imgs)
+
+          # learn a second time
+          self.use_memory(self.targets)
 
           # decay the probability of exploring
           self.exploration_prob = self.min_exploration_rate + (
