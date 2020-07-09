@@ -31,7 +31,6 @@ from gazebo_msgs.srv import SetModelState
 
 # other
 import random
-#import simpleaudio as sa
 
 
 class Node:
@@ -44,7 +43,7 @@ class Node:
 
     # hyperparameters to experiment with
     # number of learning episodes
-    self.max_episodes = 20
+    self.max_episodes = 100
     # speed of the robot's wheels
     self.speed = 7.0
     # number of memory samples that will be processed together in
@@ -55,6 +54,7 @@ class Node:
     self.batch_size = 10
     # variables for Bellman equation
     self.gamma = 0.999
+    self.alpha = 0.95
 
     # current image
     self.my_img = np.zeros(50)
@@ -433,13 +433,15 @@ class Node:
     print("last loss = " + str(loss))
 
   # bellman equation for double q network
-  def bellman_with_tn(self, targets, reward):
-    # qstar(s, a) = Rt+1 + gamma*maxqstar(s', a')
-    # max = np.argmax(targets)
-    # add reward to highest q-value
-    for i in range(len(targets[0])):
-      targets[0, i] = (targets[0, i] * self.gamma) + reward
-    return targets
+  def bellman_with_tn(self, curr_Q, next_Q, action, reward):
+    expected_Q = np.zeros(shape=[len(curr_Q), 7])
+    for i in range(len(curr_Q)):
+      max_Q = np.max(next_Q[i])
+      index = int(action[i])
+      # qstar(s, a) = Rt+1 + (1-alpha)*q(s, a) * gamma *maxqstar(s', a')
+      expected_Q[i, index] = reward[i] + (1 - self.alpha) * \
+                     curr_Q[i, index] * self.gamma * max_Q
+    return expected_Q
 
   # get random (batch of) experiences and learn with it
   # use target network for optimal q-values
@@ -447,20 +449,37 @@ class Node:
     # get random batch of memories
     memory_batch = self.memory.get_random_experience(
       batch_size=self.batch_size)
-    # update network for every memory
+
+    mem_states = np.zeros(shape=[len(memory_batch),
+                                 self.mini_batch_size * 50])
+    mem_last_states = np.zeros(shape=[len(memory_batch),
+                                      self.mini_batch_size * 50])
+    mem_actions = np.zeros(shape=[len(memory_batch)])
+    mem_rewards = np.zeros(shape=[len(memory_batch)])
+
     for i in range(len(memory_batch)):
-      mem_state = memory_batch[i].get("state")
-      mem_last_state = memory_batch[i].get("last_state")
-      mem_reward = memory_batch[i].get("reward")
-      # compute target q-values with the 'current' state of the memory
-      my_targets = self.target_net.use_network(state=mem_state)
-      # add reward to highest q-value*gamma to fulfill the bellman
-      # equation
-      my_targets = self.bellman_with_tn(my_targets, mem_reward)
-      # update policy network based on target q-values
-      output, loss = self.policy_net.update_weights(
-        state=mem_last_state,targets=my_targets)
-    print("last output y =\n\t" + str(output))
+      mem_states[i] = memory_batch[i].get("state")
+      mem_last_states[i] = memory_batch[i].get("last_state")
+      mem_actions[i] = memory_batch[i].get("action")
+      mem_rewards[i] = memory_batch[i].get("reward")
+
+    # compute actual q-values with the 'last' state of the
+    # memory
+    # curr_Q = self.policy_net.use_network(state=mem_last_states)
+    # only save important q-value of current action
+    next_Q = self.target_net.use_network(state=mem_states)
+    # expected_Qs = np.zeros(shape=[self.batch_size, 7])
+    #expected_Qs = self.bellman_with_tn(curr_Q, next_Q,
+                                            #mem_actions,
+                                            #mem_rewards)
+
+    #loss = self.policy_net.update_weights(state=mem_last_states, \
+                                          #targets=expected_Qs)
+    loss = self.policy_net.update_weights(state=mem_last_states, \
+      targets=next_Q)
+
+    #print("curr_Qs =\n\t" + str(curr_Q))
+    #print("expected_Qs =\n\t" + str(expected_Qs))
     print("last loss = " + str(loss))
 
   '''--------------------Robot process methods---------------------'''
@@ -475,7 +494,7 @@ class Node:
       self.curr_state)))
 
     # stop robot immediatley if state is 'line lost', but still
-    # do calculations
+    # do calculations afterwards (do not reset right away)
     stop_arr=[1, 6, self.lost_line]
     #if (self.curr_state == self.lost_line):
     if(self.curr_state in stop_arr):
@@ -606,44 +625,46 @@ class Node:
           # get state and reward
           self.curr_state, reward = self.get_robot_state(my_img)
 
-          # store experience
-          self.memory.store_experience(state=my_imgs,
-                                       last_state=self.last_imgs,
-                                       action=self.curr_action,
-                                       reward=reward)
+          # do not store first action in memory since it's not valid
+          if not (self.curr_action == -1):
+            # store experience
+            self.memory.store_experience(state=my_imgs,
+                                         last_state=self.last_imgs,
+                                         action=self.curr_action,
+                                         reward=reward)
 
-          '''
-          # update target net every 20th step
-          if(self.step_counter % 20 == 0):
-            self.target_net = self.policy_net.copy(self.target_net)
-            print("Updated target network")
-          '''
+            '''
+            # update target net every 20th step
+            if(self.step_counter % 20 == 0):
+              self.target_net = self.policy_net.copy(self.target_net)
+              print("Updated target network")
+            '''
+            
+            # softly update target net EVERY step
+            self.target_net = self.policy_net.copy_softly(self.target_net)
 
-          # softly update target net EVERY step
-          self.target_net = self.policy_net.copy_softly(self.target_net)
+            # get targets simple way
+            '''
+            self.targets = self.fill_targets(self.targets,
+                                             self.curr_action, reward)
+            '''
 
-          # get targets simple way
-          '''
-          self.targets = self.fill_targets(self.targets,
-                                           self.curr_action, reward)
-          '''
+            # get targets via target_network
+            # self.targets = self.target_net.use_network(
+              # state=self.last_imgs)
 
-          # get targets via target_network
-          # self.targets = self.target_net.use_network(
-            # state=self.last_imgs)
+            # use states from memory to update policy network in
+            # order to not 'forget' previously learned things
+            # self.use_memory(self.targets)
+            self.use_memory_with_tn()
 
-          # use states from memory to update policy network in
-          # order to not 'forget' previously learned things
-          # self.use_memory(self.targets)
-          self.use_memory_with_tn()
-
-          # begin a new episode if robot lost the line
-          if (self.curr_state == self.lost_line):
-            self.begin_new_episode()
-            # episode is done => increase counter
-            self.episode_counter += 1
-            # skip the next steps and start a new loop
-            continue
+            # begin a new episode if robot lost the line
+            if (self.curr_state == self.lost_line):
+              self.begin_new_episode()
+              # episode is done => increase counter
+              self.episode_counter += 1
+              # skip the next steps and start a new loop
+              continue
 
           #print("begin driving")
           # get the next action

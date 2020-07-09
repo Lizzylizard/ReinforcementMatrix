@@ -43,18 +43,6 @@ class Memory():
     for i in range(len(rand)):
       experience.append(self.experiences[rand[i]])
 
-    # for easier use of tensorflow ALWAYS return number of
-    # experiences = batch size
-    # if not enough experiences there, just append the last one
-    # until full
-    # last_one = experience[-1]
-    '''
-    if(len(experience) > 1):
-      last_one = experience[len(experience)-1]
-      while(len(experience) < batch_size):
-        experience.append(last_one)
-    '''
-
     # print("Batch size = " + str(batch_size))
     # print("Experience array = \n" + str(experience))
     return experience
