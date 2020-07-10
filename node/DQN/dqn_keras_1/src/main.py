@@ -31,6 +31,7 @@ from gazebo_msgs.srv import SetModelState
 
 # other
 import random
+import os
 
 
 class Node:
@@ -39,19 +40,19 @@ class Node:
     '''---------------------Hyperparameters------------------------'''
     # hyperparameters to experiment with
     # number of learning episodes
-    self.max_episodes = 200
+    self.max_episodes = 1000
     # speed of the robot's wheels
     self.speed = 7.0
     # replay buffer capacity
-    self.rb_capacity = 10000
+    self.rb_capacity = 2000
     # number of examples that will be extracted at once from
     # the memory
-    self.batch_size = 1000
+    self.batch_size = 64
     # number of memory samples that will be processed together in
     # one execution of the neural network
-    self.mini_batch_size = 10
+    self.mini_batch_size = 4
     # variables for Bellman equation
-    self.gamma = 0.99
+    self.gamma = 0.95
     self.alpha = 0.95
     # update rate for target network
     self.update_r_targets = 1
@@ -81,10 +82,15 @@ class Node:
     self.step_counter = 0  # counts every while iteration
     self.steps_in_episode = 0  # counts steps inside current episode
     # variables deciding whether to explore or to exploit
+    # old
     self.exploration_prob = 0.99
     self.decay_rate = 0.01
     self.min_exploration_rate = 0.01
     self.max_exploration_rate = 1
+    # new
+    self.epsilon = 1
+    self.epsilon_min = 0.001
+    self.epsilon_decay = 0.999
 
     '''-------------------------Strings----------------------------'''
     # strings to display actions
@@ -116,17 +122,21 @@ class Node:
     # tensorflow session object
     self.sess = tf.compat.v1.Session()
     # policy network
-    self.policy_net = Network.Network(mini_batch_size=self.mini_batch_size,
-                                      size_layer1=5,
-                                      session=self.sess)
+    input_shape = np.shape(self.my_mult_img)
+    self.policy_net = Network.Network(mini_batch_size=self.mini_batch_size)
+    #self.policy_net = Network.Network(
+    # mini_batch_size=self.mini_batch_size,
+                                      #size_layer1=5,
+                                      #session=self.sess)
     # target array (for simple way)
     self.targets = np.zeros(shape=[1, (len(self.action_strings) - 1)])
     # target network to calculate 'optimal' q-values
-    self.target_net = Network.Network(mini_batch_size=self.mini_batch_size,
-                                      size_layer1=5,
-                                      session=self.sess)
+    #self.target_net = Network.Network(
+    # mini_batch_size=self.mini_batch_size,
+                                      #size_layer1=5,
+                                      #session=self.sess)
     # copy weights and layers from the policy net into the target net
-    self.target_net = self.policy_net.copy(self.target_net)
+    #self.target_net = self.policy_net.copy(self.target_net)
 
     '''--------------------------Driving---------------------------'''
     # terminal states
@@ -343,10 +353,10 @@ class Node:
 
   # choose one of five given positions randomly
   def select_starting_pos(self):
-    # straight line (long) going into left curve
-    self.x_position = -0.9032014349
-    self.y_position = -6.22487658223
-    self.z_position = -0.0298790967155
+    # sharp left curve
+    self.x_position = 0.930205421421
+    self.y_position = -5.77364575559
+    self.z_position = -0.0301045554742
     '''
     # choose random number between 0 and 1
     rand = random.uniform(0, 1)
@@ -470,24 +480,44 @@ class Node:
       mem_actions[i] = memory_batch[i].get("action")
       mem_rewards[i] = memory_batch[i].get("reward")
 
+    print("mini batch size = " + str(np.shape(mem_last_states[0])))
+
     # compute actual q-values with the 'last' states of the
     # memory
     curr_Q = self.policy_net.use_network(state=mem_last_states)
     # compute next q-values with 'current' states of the memory
-    next_Q = self.target_net.use_network(state=mem_states)
+    next_Q = self.policy_net.use_network(state=mem_states)
     # use Bellman equation to compute target q-values
     expected_Qs = self.bellman_with_tn(curr_Q, next_Q,
                                             mem_actions,
                                             mem_rewards)
 
     loss = self.policy_net.update_weights(state=mem_last_states, \
-                                          targets=expected_Qs)
+                                          targets=expected_Qs,
+                                          batch_size=self.batch_size)
     #loss = self.policy_net.update_weights(state=mem_last_states, \
       #targets=next_Q)
 
     #print("curr_Qs =\n\t" + str(curr_Q))
     #print("expected_Qs =\n\t" + str(expected_Qs))
     print("last loss = " + str(loss))
+
+  # save neural networks
+  def save_model(self):
+    path = os.path.dirname(os.path.realpath(__file__))
+    # print("PATH IS = " + str(path))
+    online_path = (path + "/online")
+    os.mkdir(online_path)
+    online_file_path = (online_path + "/online_net.h5")
+    self.policy_net.model.save(online_file_path)
+
+    target_path = (path + "/target")
+    target_file_path = (target_path + "/target_net.h5")
+    # self.target_net.model.save("target_path")
+
+  # load already existing model
+  def load_model(self):
+    pass
 
   '''--------------------Robot process methods---------------------'''
   # get current state and reward
@@ -545,10 +575,18 @@ class Node:
   '''---------------Exploration exploitation trade off----------------'''
   # exponentially decay epsilon
   def decay_epsilon(self):
+    # new
+    if (self.memory.count > (self.rb_capacity/2)):
+      if self.epsilon > self.epsilon_min:
+        self.epsilon *= self.epsilon_decay
+    self.exploration_prob = self.epsilon
+    '''
     # deep lizard
+    # old
     self.exploration_prob = self.min_exploration_rate + \
       (self.max_exploration_rate - self.min_exploration_rate) * \
       np.exp(-self.decay_rate * self.episode_counter)
+    '''
 
   # decide whether to explore or to exploit
   def epsilon_greedy(self, e):
@@ -603,6 +641,8 @@ class Node:
     # publish
     self.vel_msg = self.stop()
     self.velocity_publisher.publish(self.vel_msg)
+    # save neural networks
+    self.save_model()
 
   '''--------------------Drive without learning--------------------'''
   # use trained network to drive
@@ -613,6 +653,8 @@ class Node:
       # self.speed *= 1.5
       # make sound to signal that learning is finished
       sound.make_sound()
+      # save neural network
+      self.save_model()
       # indicate end of first iteration after learning is finished
       self.first_time = False
 
@@ -661,50 +703,51 @@ class Node:
           # get state and reward
           self.curr_state, reward = self.get_robot_state(my_img)
 
-          # do not store first action in memory since it's not valid
-          if not (self.curr_action == -1):
-            # store experience
-            self.memory.store_experience(state=my_imgs,
-                                         last_state=self.last_imgs,
-                                         action=self.curr_action,
-                                         reward=reward)
+          # store experience
+          self.memory.store_experience(state=my_imgs,
+                                       last_state=self.last_imgs,
+                                       action=self.curr_action,
+                                       reward=reward)
 
+          '''
+          # update target net at start of every 5th episode
+          if(self.episode_counter % self.update_r_targets == 0 and
+            self.steps_in_episode == 0):
+            self.target_net = self.policy_net.copy(self.target_net)
+            print("Updated target network")
+          '''
+          '''
+          # softly update target net EVERY step
+          self.target_net = self.policy_net.copy_softly(self.target_net)
+          '''
 
-            # update target net at start of every 5th episode
-            if(self.episode_counter % self.update_r_targets == 0 and
-              self.steps_in_episode == 0):
-              self.target_net = self.policy_net.copy(self.target_net)
-              print("Updated target network")
+          # get targets simple way
+          '''
+          self.targets = self.fill_targets(self.targets,
+                                           self.curr_action, reward)
+          '''
 
-            '''
-            # softly update target net EVERY step
-            self.target_net = self.policy_net.copy_softly(self.target_net)
-            '''
+          # get targets via target_network
+          # self.targets = self.target_net.use_network(
+            # state=self.last_imgs)
 
-            # get targets simple way
-            '''
-            self.targets = self.fill_targets(self.targets,
-                                             self.curr_action, reward)
-            '''
+          # use states from memory to update policy network in
+          # order to not 'forget' previously learned things
+          # self.use_memory(self.targets)
+          self.use_memory_with_tn()
 
-            # get targets via target_network
-            # self.targets = self.target_net.use_network(
-              # state=self.last_imgs)
-
-            # use states from memory to update policy network in
-            # order to not 'forget' previously learned things
-            # self.use_memory(self.targets)
-            self.use_memory_with_tn()
-
-            # begin a new episode if robot lost the line
-            if (self.curr_state == self.lost_line):
-              self.begin_new_episode()
-              # episode is done => increase counter
-              self.episode_counter += 1
-              # reset steps in episode counter to 0
-              self.steps_in_episode = 0
-              # skip the next steps and start a new loop
-              continue
+          # begin a new episode if robot lost the line
+          # or if current episode is lasting longer than 500
+          # iterations
+          if (self.curr_state == self.lost_line or
+            self.steps_in_episode > 500):
+            self.begin_new_episode()
+            # episode is done => increase counter
+            self.episode_counter += 1
+            # reset steps in episode counter to 0
+            self.steps_in_episode = 0
+            # skip the next steps and start a new loop
+            continue
 
           #print("begin driving")
           # get the next action

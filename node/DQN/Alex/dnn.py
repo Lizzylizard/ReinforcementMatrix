@@ -176,5 +176,5 @@ cm = np.zeros([nrClasses, nrClasses]);
 for numOut, l in zip(numOutputs, testl.argmax(axis=1)):
   cm[l, numOut] += 1;
 
-print("Confusion ?Atrix");
+print("Confusion Matrix");
 print(cm);
