@@ -39,7 +39,7 @@ class Network():
 
     # layer 3
     self.W3 = tf.Variable \
-      (np.random.uniform(-0.01, 0.01,[size_layer1,out_1]), name="W3")
+      (np.random.uniform(-0.01, 0.01,[size_layer1, out_1]), name="W3")
     self.b3 = tf.Variable \
       (np.random.uniform(-0.01, 0.01, [out_1]),name="b3")
     self.a3 = tf.compat.v1.matmul(self.a1, self.W3) + self.b3
@@ -83,12 +83,13 @@ class Network():
 
   # copy all of the layers, weights and biases to the target network
   def copy(self, target_net):
+    # W1
     self.sess.run(tf.assign(target_net.W1, self.W1))
     # W3
     self.sess.run(tf.assign(target_net.W3, self.W3))
     # b1
     self.sess.run(tf.assign(target_net.b1, self.b1))
-    # b2
+    # b3
     self.sess.run(tf.assign(target_net.b3, self.b3))
 
     return target_net
@@ -115,15 +116,21 @@ class Network():
     tau = tf.cast(tau1, tf.float64)
     # W1
     sum = self.polyak(self.W1, target_net.W1, tau)
-    self.sess.run(tf.assign(target_net.W1, sum))
+    assign_w1 = tf.assign(target_net.W1, sum)
+    #self.sess.run(tf.assign(target_net.W1, sum))
     # W3
     sum2 = self.polyak(self.W3, target_net.W3, tau)
-    self.sess.run(tf.assign(target_net.W3, sum2))
+    assign_w3 = tf.assign(target_net.W3, sum2)
+    #self.sess.run(tf.assign(target_net.W3, sum2))
     # b1
     sum3 = self.polyak(self.b1, target_net.b1, tau)
-    self.sess.run(tf.assign(target_net.b1, sum3))
+    assign_b1 = tf.assign(target_net.b1, sum3)
+    #self.sess.run(tf.assign(target_net.b1, sum3))
     # b3
     sum4 = self.polyak(self.b3, target_net.b3, tau)
-    self.sess.run(tf.assign(target_net.b3, sum4))
+    assign_b3 = tf.assign(target_net.b3, sum4)
+    #self.sess.run(tf.assign(target_net.b3, sum4))
+
+    self.sess.run([assign_w1, assign_w3, assign_b1, assign_b3])
 
     return target_net

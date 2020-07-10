@@ -36,44 +36,57 @@ import random
 class Node:
   '''-------------------------Constructor--------------------------'''
   def __init__(self):
-    # helper classes
-    self.bot = bt.Bot()  # reward + q-matrix
-    self.imgHelper = mi.MyImage()  # image processing
-    self.memory = Memory.Memory(1000) # replay buffer
-
+    '''---------------------Hyperparameters------------------------'''
     # hyperparameters to experiment with
     # number of learning episodes
     self.max_episodes = 100
     # speed of the robot's wheels
-    self.speed = 7.0
-    # number of memory samples that will be processed together in
-    # one execution of the neural network
-    self.mini_batch_size = 2
+    self.speed = 5.0
+    # replay buffer capacity
+    self.rb_capacity = 10000
     # number of examples that will be extracted at once from
     # the memory
-    self.batch_size = 10
+    self.batch_size = 1000
+    # number of memory samples that will be processed together in
+    # one execution of the neural network
+    self.mini_batch_size = 10
     # variables for Bellman equation
-    self.gamma = 0.999
+    self.gamma = 0.99
     self.alpha = 0.95
+    # update rate for target network
+    self.update_r_targets = 1
 
+    '''------------------------Class objects-----------------------'''
+    # helper classes
+    self.bot = bt.Bot()  # reward + q-matrix
+    self.imgHelper = mi.MyImage()  # image processing
+    self.memory = Memory.Memory(self.rb_capacity) # replay buffer
+
+    '''--------------------------Images----------------------------'''
     # current image
     self.my_img = np.zeros(50)
-    # current multiple images
+    # image stack
+    self.image_stack = np.zeros(shape=[self.mini_batch_size, 50])
+    # flattened current multiple images
     self.my_mult_img = np.zeros(shape=[1, self.mini_batch_size*50])
     # last images
     self.last_imgs = np.copy(self.my_mult_img)
     # number of images received in total
     self.img_cnt = 0
+
+    '''-------------------------Episodes---------------------------'''
     # episodes
     self.explorationMode = False  # exploring or exploiting?
     self.episode_counter = 0  # number of done episodes
     self.step_counter = 0  # counts every while iteration
+    self.steps_in_episode = 0  # counts steps inside current episode
     # variables deciding whether to explore or to exploit
     self.exploration_prob = 0.99
     self.decay_rate = 0.01
     self.min_exploration_rate = 0.01
     self.max_exploration_rate = 1
 
+    '''-------------------------Strings----------------------------'''
     # strings to display actions
     self.action_strings = {
       0: "sharp left",
@@ -98,6 +111,7 @@ class Node:
       7: "lost"
     }
 
+    '''----------------------Neural network------------------------'''
     # neural network
     # tensorflow session object
     self.sess = tf.compat.v1.Session()
@@ -114,11 +128,7 @@ class Node:
     # copy weights and layers from the policy net into the target net
     self.target_net = self.policy_net.copy(self.target_net)
 
-    # message to post on topic /cmd_vel
-    self.vel_msg = Twist()
-    # Bool: exploring (True) or exploiting (False)?
-    self.explorationMode = False
-
+    '''--------------------------Driving---------------------------'''
     # terminal states
     self.lost_line = 7
     self.stop_action = 7
@@ -144,6 +154,10 @@ class Node:
     # flag to indicate end of learning
     self.first_time = True
 
+    '''----------------------------ROS-----------------------------'''
+    # message to post on topic /cmd_vel
+    self.vel_msg = Twist()
+
     # ROS variables
     # publisher to publish on topic /cmd_vel
     self.velocity_publisher = rospy.Publisher('/cmd_vel', Twist,
@@ -162,6 +176,10 @@ class Node:
     img = self.imgHelper.img_conversion(msg)
     self.my_img = np.copy(img)
 
+    # put in current image stack
+    index = self.img_cnt % self.mini_batch_size
+    self.image_stack[index] = self.my_img
+
     print("Image number " + str(self.img_cnt))
     self.img_cnt += 1
 
@@ -176,14 +194,11 @@ class Node:
 
   # receive multiple images
   def get_multiple_images(self):
-    # helping array
-    images = np.zeros(shape=[self.mini_batch_size, 50])
-    # wait for the next images
-    cnt = 0
-    while (cnt < self.mini_batch_size):
-      images[cnt] = self.get_image()
-      cnt += 1
-    # flatten helping array
+    # wait for the next image
+    self.get_image()
+    # get current version of image stack
+    images = self.image_stack
+    # flatten image stack
     self.my_mult_img[0] = images.flatten()
     # return current images
     return self.my_mult_img
@@ -327,11 +342,11 @@ class Node:
       print("Service call failed: %s" % e)
 
   # choose one of five given positions randomly
-  def choose_random_starting_position(self):
-    # sharp right curve
-    self.x_position = 1.1291257432
-    self.y_position = -3.37940826549
-    self.z_position = -0.0298815752691
+  def select_starting_pos(self):
+    # straight line (long) going into left curve
+    self.x_position = -0.9032014349
+    self.y_position = -6.22487658223
+    self.z_position = -0.0298790967155
     '''
     # choose random number between 0 and 1
     rand = random.uniform(0, 1)
@@ -383,25 +398,11 @@ class Node:
   # puts robot back to starting position
   def reset_environment(self):
     # select position
-    self.choose_random_starting_position()
+    self.select_starting_pos()
 
     # set robot to it
     self.set_position(self.x_position, self.y_position,
                       self.z_position)
-
-  # decide whether to explore or to exploit
-  def epsilon_greedy(self, e):
-    # random number
-    exploration_rate_threshold = random.uniform(0, 1)
-
-    if (exploration_rate_threshold < e):
-      # explore
-      self.explorationMode = True
-      return True
-    else:
-      # exploit
-      self.explorationMode = False
-      return False
 
   '''-----------------------Network methods------------------------'''
   # fill targets
@@ -463,20 +464,20 @@ class Node:
       mem_actions[i] = memory_batch[i].get("action")
       mem_rewards[i] = memory_batch[i].get("reward")
 
-    # compute actual q-values with the 'last' state of the
+    # compute actual q-values with the 'last' states of the
     # memory
-    # curr_Q = self.policy_net.use_network(state=mem_last_states)
-    # only save important q-value of current action
+    curr_Q = self.policy_net.use_network(state=mem_last_states)
+    # compute next q-values with 'current' states of the memory
     next_Q = self.target_net.use_network(state=mem_states)
-    # expected_Qs = np.zeros(shape=[self.batch_size, 7])
-    #expected_Qs = self.bellman_with_tn(curr_Q, next_Q,
-                                            #mem_actions,
-                                            #mem_rewards)
+    # use Bellman equation to compute target q-values
+    expected_Qs = self.bellman_with_tn(curr_Q, next_Q,
+                                            mem_actions,
+                                            mem_rewards)
 
-    #loss = self.policy_net.update_weights(state=mem_last_states, \
-                                          #targets=expected_Qs)
     loss = self.policy_net.update_weights(state=mem_last_states, \
-      targets=next_Q)
+                                          targets=expected_Qs)
+    #loss = self.policy_net.update_weights(state=mem_last_states, \
+      #targets=next_Q)
 
     #print("curr_Qs =\n\t" + str(curr_Q))
     #print("expected_Qs =\n\t" + str(expected_Qs))
@@ -495,7 +496,8 @@ class Node:
 
     # stop robot immediatley if state is 'line lost', but still
     # do calculations afterwards (do not reset right away)
-    stop_arr=[1, 6, self.lost_line]
+    # stop_arr=[1, 6, self.lost_line]
+    stop_arr=[self.lost_line]
     #if (self.curr_state == self.lost_line):
     if(self.curr_state in stop_arr):
       self.stopRobot()
@@ -534,14 +536,38 @@ class Node:
     vel = function()
     self.velocity_publisher.publish(vel)
 
+  '''---------------Exploration exploitation trade off----------------'''
+  # exponentially decay epsilon
+  def decay_epsilon(self):
+    # deep lizard
+    self.exploration_prob = self.min_exploration_rate + \
+      (self.max_exploration_rate - self.min_exploration_rate) * \
+      np.exp(-self.decay_rate * self.episode_counter)
+
+  # decide whether to explore or to exploit
+  def epsilon_greedy(self, e):
+    # random number
+    exploration_rate_threshold = random.uniform(0, 1)
+    print("Exploration prob = " + str(e))
+    print("threshold = " + str(exploration_rate_threshold))
+
+    if (exploration_rate_threshold < e):
+      # explore
+      self.explorationMode = True
+      return True
+    else:
+      # exploit
+      self.explorationMode = False
+      return False
+
   # select and execute action
   def get_next_action(self, my_imgs):
     # if exploring: choose random action
-    print("Exploration prob = " + str(self.exploration_prob))
     if (self.epsilon_greedy(self.exploration_prob)):
       print("Exploring")
       # take random action
       action = np.random.randint(low=0, high=7)
+      print("random action is = " + str(action))
       print("Action: " + self.action_strings.get(action))
       self.execute_action(action)
       self.curr_action = action
@@ -575,9 +601,13 @@ class Node:
   '''--------------------Drive without learning--------------------'''
   # use trained network to drive
   def drive(self):
-    # make sound to signal that learning is finished
+    # if in first iteration after learning is finished
     if(self.first_time):
+      # make robot drive faster
+      # self.speed *= 1.5
+      # make sound to signal that learning is finished
       sound.make_sound()
+      # indicate end of first iteration after learning is finished
       self.first_time = False
 
     # wait for new image(s)
@@ -633,15 +663,17 @@ class Node:
                                          action=self.curr_action,
                                          reward=reward)
 
-            '''
-            # update target net every 20th step
-            if(self.step_counter % 20 == 0):
+
+            # update target net at start of every 5th episode
+            if(self.episode_counter % self.update_r_targets == 0 and
+              self.steps_in_episode == 0):
               self.target_net = self.policy_net.copy(self.target_net)
               print("Updated target network")
+
             '''
-            
             # softly update target net EVERY step
             self.target_net = self.policy_net.copy_softly(self.target_net)
+            '''
 
             # get targets simple way
             '''
@@ -663,6 +695,8 @@ class Node:
               self.begin_new_episode()
               # episode is done => increase counter
               self.episode_counter += 1
+              # reset steps in episode counter to 0
+              self.steps_in_episode = 0
               # skip the next steps and start a new loop
               continue
 
@@ -678,12 +712,10 @@ class Node:
 
           # learn a second time
           # self.use_memory(self.targets)
-          # self.use_memory_with_tn()
+          self.use_memory_with_tn()
 
           # decay the probability of exploring
-          self.exploration_prob = self.min_exploration_rate + (
-            self.max_exploration_rate - self.min_exploration_rate) * \
-              np.exp(-self.decay_rate * self.episode_counter)
+          self.decay_epsilon()
 
           # end of iteration
           print("-" * 100)
@@ -699,6 +731,8 @@ class Node:
 
         # count taken steps (while cycles)
         self.step_counter += 1
+        # count taken steps inside current episode
+        self.steps_in_episode += 1
 
     except rospy.ROSInterruptException:
       pass
