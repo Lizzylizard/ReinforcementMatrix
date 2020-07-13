@@ -37,25 +37,31 @@ import os
 class Node:
   '''-------------------------Constructor--------------------------'''
   def __init__(self):
+    '''--------------------------Path------------------------------'''
+    self.path_nr = 2  # increment every time the program is run!
+    # set to false if you wish to start program with existing model
+    self.learn = True
+
     '''---------------------Hyperparameters------------------------'''
     # hyperparameters to experiment with
     # number of learning episodes
-    self.max_episodes = 1000
+    self.max_episodes = 300
+    self.max_steps_per_episode = 200
     # speed of the robot's wheels
-    self.speed = 7.0
+    self.speed = 5.0
     # replay buffer capacity
     self.rb_capacity = 2000
     # number of examples that will be extracted at once from
     # the memory
-    self.batch_size = 64
+    self.batch_size = 200
     # number of memory samples that will be processed together in
     # one execution of the neural network
-    self.mini_batch_size = 4
+    self.mini_batch_size = 2
     # variables for Bellman equation
     self.gamma = 0.95
     self.alpha = 0.95
     # update rate for target network
-    self.update_r_targets = 1
+    self.update_r_targets = 10
 
     '''------------------------Class objects-----------------------'''
     # helper classes
@@ -507,17 +513,26 @@ class Node:
     path = os.path.dirname(os.path.realpath(__file__))
     # print("PATH IS = " + str(path))
     online_path = (path + "/online")
-    os.mkdir(online_path)
-    online_file_path = (online_path + "/online_net.h5")
+    # os.mkdir(online_path)
+    online_file_path = (online_path + "/online_net" + str(
+      self.path_nr) + ".h5")
     self.policy_net.model.save(online_file_path)
 
     target_path = (path + "/target")
-    target_file_path = (target_path + "/target_net.h5")
+    target_file_path = (target_path + "/target_net" + str(
+      self.path_nr) + ".h5")
     # self.target_net.model.save("target_path")
 
   # load already existing model
   def load_model(self):
-    pass
+    path = os.path.dirname(os.path.realpath(__file__))
+    online_file_path = (path + "/online" + "/online_net" + str(
+      self.path_nr) + ".h5")
+    target_file_path = (path + "/target" + "/target_net" + str(
+      self.path_nr) + ".h5")
+    self.policy_net = tf.keras.models.load_model(online_file_path)
+    # self.target_net = tf.keras.models.load_model(target_file_path)
+
 
   '''--------------------Robot process methods---------------------'''
   # get current state and reward
@@ -641,8 +656,9 @@ class Node:
     # publish
     self.vel_msg = self.stop()
     self.velocity_publisher.publish(self.vel_msg)
-    # save neural networks
-    self.save_model()
+    if(self.learn):
+      # save neural networks
+      self.save_model()
 
   '''--------------------Drive without learning--------------------'''
   # use trained network to drive
@@ -665,8 +681,37 @@ class Node:
 
     # get q-values by feeding images to the DQN
     # without updating its weights
-    self.q_values = self.policy_net.use_network(
-      state=my_imgs)
+    self.q_values = self.policy_net.use_network(state=my_imgs)
+    # choose action by selecting highest q -value
+    action = np.argmax(self.q_values)
+    print("Action: " + self.action_strings.get(action))
+
+    # execute action
+    self.execute_action(action)
+    # stop if line is lost (hopefully never, if
+    # robot learned properly)
+    if (self.curr_state == self.lost_line):
+      self.reset_environment()
+
+  # use pre-existing trained network to drive
+  def test(self):
+    # if in first iteration after learning is finished
+    if(self.first_time):
+      # make robot drive faster
+      # self.speed *= 1.5
+      # load existing model
+      self.load_model()
+      # indicate end of first iteration after learning is finished
+      self.first_time = False
+
+    # wait for new image(s)
+    my_imgs, my_img = self.shape_images()
+    # get new / current state
+    self.curr_state = self.bot.get_state(my_img)
+
+    # get q-values by feeding images to the DQN
+    # without updating its weights
+    self.q_values = self.policy_net.predict(my_imgs)
     # choose action by selecting highest q -value
     action = np.argmax(self.q_values)
     print("Action: " + self.action_strings.get(action))
@@ -694,89 +739,94 @@ class Node:
     try:
       while not rospy.is_shutdown():
         # reinforcement learning
-        if (self.episode_counter <= self.max_episodes):
-          print("-" * 100)
-          print("Learning")
-          # wait for next image(s)
-          my_imgs, my_img = self.shape_images()
+        if(self.learn):
+          if (self.episode_counter <= self.max_episodes):
+            print("-" * 100)
+            print("Learning")
+            # wait for next image(s)
+            my_imgs, my_img = self.shape_images()
 
-          # get state and reward
-          self.curr_state, reward = self.get_robot_state(my_img)
+            # get state and reward
+            self.curr_state, reward = self.get_robot_state(my_img)
 
-          # store experience
-          self.memory.store_experience(state=my_imgs,
-                                       last_state=self.last_imgs,
-                                       action=self.curr_action,
-                                       reward=reward)
+            # store experience
+            self.memory.store_experience(state=my_imgs,
+                                         last_state=self.last_imgs,
+                                         action=self.curr_action,
+                                         reward=reward)
 
-          '''
-          # update target net at start of every 5th episode
-          if(self.episode_counter % self.update_r_targets == 0 and
-            self.steps_in_episode == 0):
-            self.target_net = self.policy_net.copy(self.target_net)
-            print("Updated target network")
-          '''
-          '''
-          # softly update target net EVERY step
-          self.target_net = self.policy_net.copy_softly(self.target_net)
-          '''
+            '''
+            # update target net at start of every 5th episode
+            if(self.episode_counter % self.update_r_targets == 0 and
+              self.steps_in_episode == 0):
+              self.target_net = self.policy_net.copy(self.target_net)
+              print("Updated target network")
+            '''
+            '''
+            # softly update target net EVERY step
+            self.target_net = self.policy_net.copy_softly(self.target_net)
+            '''
 
-          # get targets simple way
-          '''
-          self.targets = self.fill_targets(self.targets,
-                                           self.curr_action, reward)
-          '''
+            # get targets simple way
+            '''
+            self.targets = self.fill_targets(self.targets,
+                                             self.curr_action, reward)
+            '''
 
-          # get targets via target_network
-          # self.targets = self.target_net.use_network(
-            # state=self.last_imgs)
+            # get targets via target_network
+            # self.targets = self.target_net.use_network(
+              # state=self.last_imgs)
 
-          # use states from memory to update policy network in
-          # order to not 'forget' previously learned things
-          # self.use_memory(self.targets)
-          self.use_memory_with_tn()
+            # use states from memory to update policy network in
+            # order to not 'forget' previously learned things
+            # self.use_memory(self.targets)
+            self.use_memory_with_tn()
 
-          # begin a new episode if robot lost the line
-          # or if current episode is lasting longer than 500
-          # iterations
-          if (self.curr_state == self.lost_line or
-            self.steps_in_episode > 500):
-            self.begin_new_episode()
-            # episode is done => increase counter
-            self.episode_counter += 1
-            # reset steps in episode counter to 0
-            self.steps_in_episode = 0
-            # skip the next steps and start a new loop
-            continue
+            # begin a new episode if robot lost the line
+            # or if current episode is lasting longer than 500
+            # iterations
+            if (self.curr_state == self.lost_line or
+              self.steps_in_episode > self.max_steps_per_episode):
+              self.begin_new_episode()
+              # episode is done => increase counter
+              self.episode_counter += 1
+              # reset steps in episode counter to 0
+              self.steps_in_episode = 0
+              # skip the next steps and start a new loop
+              continue
 
-          #print("begin driving")
-          # get the next action
-          self.curr_action = self.get_next_action(my_imgs)
-          # wait for some images
-          #for i in range(2):
-           # self.get_image()
-          # stop robot in order to not miss any images
-          #self.stopRobot()
-          #print("end driving")
+            #print("begin driving")
+            # get the next action
+            self.curr_action = self.get_next_action(my_imgs)
+            # wait for some images
+            #for i in range(2):
+             # self.get_image()
+            # stop robot in order to not miss any images
+            #self.stopRobot()
+            #print("end driving")
 
-          # learn a second time
-          # self.use_memory(self.targets)
-          self.use_memory_with_tn()
+            # learn a second time
+            # self.use_memory(self.targets)
+            self.use_memory_with_tn()
 
-          # decay the probability of exploring
-          self.decay_epsilon()
+            # decay the probability of exploring
+            self.decay_epsilon()
 
-          # end of iteration
-          print("-" * 100)
+            # end of iteration
+            print("-" * 100)
 
-          # start a new loop at the current position
-          # (robot will only be set back to starting
-          # position if line is lost)
+            # start a new loop at the current position
+            # (robot will only be set back to starting
+            # position if line is lost)
 
-        # using trained network to drive
+          else:
+            print("Driving!")
+            self.drive()
+
+          # using trained network to drive
         else:
-          print("Driving!")
-          self.drive()
+          print("Testing!")
+          self.test()
 
         # count taken steps (while cycles)
         self.step_counter += 1
