@@ -1,2 +1,4 @@
 Network models
 - online_net1.h5	works (without target net)
+- online_net2.h5	works (without target net)
+- online_net3.h5	dos NOT work

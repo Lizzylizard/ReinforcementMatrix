@@ -37,18 +37,21 @@ import os
 class Node:
   '''-------------------------Constructor--------------------------'''
   def __init__(self):
-    '''--------------------------Path------------------------------'''
-    self.path_nr = 2  # increment every time the program is run!
-    # set to false if you wish to start program with existing model
+    '''--------------Adjust before running program-----------------'''
+    # increment if you wish to save a new version of the network model
+    # or set to specific model version if you wish to use an existing
+    # model
+    self.path_nr = 3
+    # set to False if you wish to run program with existing model
     self.learn = True
 
     '''---------------------Hyperparameters------------------------'''
     # hyperparameters to experiment with
     # number of learning episodes
-    self.max_episodes = 300
-    self.max_steps_per_episode = 200
+    self.max_episodes = 500
+    self.max_steps_per_episode = 500
     # speed of the robot's wheels
-    self.speed = 5.0
+    self.speed = 10.0
     # replay buffer capacity
     self.rb_capacity = 2000
     # number of examples that will be extracted at once from
@@ -656,8 +659,8 @@ class Node:
     # publish
     self.vel_msg = self.stop()
     self.velocity_publisher.publish(self.vel_msg)
+    # save neural networks
     if(self.learn):
-      # save neural networks
       self.save_model()
 
   '''--------------------Drive without learning--------------------'''
@@ -830,6 +833,8 @@ class Node:
 
         # count taken steps (while cycles)
         self.step_counter += 1
+        if(self.steps_in_episode >= self.max_steps_per_episode):
+          print("Reached max. steps!")
         # count taken steps inside current episode
         self.steps_in_episode += 1
 
