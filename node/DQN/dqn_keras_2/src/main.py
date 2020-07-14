@@ -41,17 +41,17 @@ class Node:
     # increment if you wish to save a new version of the network model
     # or set to specific model version if you wish to use an existing
     # model
-    self.path_nr = 4
+    self.path_nr = 0
     # set to False if you wish to run program with existing model
     self.learn = True
 
     '''---------------------Hyperparameters------------------------'''
     # hyperparameters to experiment with
     # number of learning episodes
-    self.max_episodes = 1000
+    self.max_episodes = 200
     self.max_steps_per_episode = 500
     # speed of the robot's wheels
-    self.speed = 8.5
+    self.speed = 5.0
     # replay buffer capacity
     self.rb_capacity = 2000
     # number of examples that will be extracted at once from
@@ -67,7 +67,6 @@ class Node:
     self.update_r_targets = 10
     # integer variable after how many episodes exploiting is possible
     self.start_decaying = (self.max_episodes / 5)
-    # self.start_decaying = 0
 
     '''------------------------Class objects-----------------------'''
     # helper classes
@@ -136,19 +135,12 @@ class Node:
     # policy network
     input_shape = np.shape(self.my_mult_img)
     self.policy_net = Network.Network(mini_batch_size=self.mini_batch_size)
-    #self.policy_net = Network.Network(
-    # mini_batch_size=self.mini_batch_size,
-                                      #size_layer1=5,
-                                      #session=self.sess)
     # target array (for simple way)
     self.targets = np.zeros(shape=[1, (len(self.action_strings) - 1)])
     # target network to calculate 'optimal' q-values
-    #self.target_net = Network.Network(
-    # mini_batch_size=self.mini_batch_size,
-                                      #size_layer1=5,
-                                      #session=self.sess)
+    self.target_net = Network.Network(mini_batch_size=self.mini_batch_size)
     # copy weights and layers from the policy net into the target net
-    #self.target_net = self.policy_net.copy(self.target_net)
+    self.target_net = self.policy_net.copy(self.target_net)
 
     '''--------------------------Driving---------------------------'''
     # terminal states
@@ -365,9 +357,9 @@ class Node:
 
   # choose one of five given positions randomly
   def select_starting_pos(self):
-    # straight line (long) going into left curve
-    self.x_position = -0.9032014349
-    self.y_position = -6.22487658223
+    # straight line going into right curve
+    self.x_position = 0.4132014349
+    self.y_position = -2.89940826549
     self.z_position = -0.0298790967155
     '''
     # choose random number between 0 and 1
@@ -498,7 +490,7 @@ class Node:
     # memory
     curr_Q = self.policy_net.use_network(state=mem_last_states)
     # compute next q-values with 'current' states of the memory
-    next_Q = self.policy_net.use_network(state=mem_states)
+    next_Q = self.target_net.use_network(state=mem_states)
     # use Bellman equation to compute target q-values
     expected_Qs = self.bellman_with_tn(curr_Q, next_Q,
                                             mem_actions,
@@ -527,7 +519,7 @@ class Node:
     target_path = (path + "/target")
     target_file_path = (target_path + "/target_net" + str(
       self.path_nr) + ".h5")
-    # self.target_net.model.save("target_path")
+    self.target_net.model.save(target_file_path)
 
   # load already existing model
   def load_model(self):
@@ -537,7 +529,7 @@ class Node:
     target_file_path = (path + "/target" + "/target_net" + str(
       self.path_nr) + ".h5")
     self.policy_net = tf.keras.models.load_model(online_file_path)
-    # self.target_net = tf.keras.models.load_model(target_file_path)
+    self.target_net = tf.keras.models.load_model(target_file_path)
 
   '''--------------------Robot process methods---------------------'''
   # get current state and reward
@@ -761,17 +753,12 @@ class Node:
                                          action=self.curr_action,
                                          reward=reward)
 
-            '''
+
             # update target net at start of every 5th episode
             if(self.episode_counter % self.update_r_targets == 0 and
               self.steps_in_episode == 0):
               self.target_net = self.policy_net.copy(self.target_net)
               print("Updated target network")
-            '''
-            '''
-            # softly update target net EVERY step
-            self.target_net = self.policy_net.copy_softly(self.target_net)
-            '''
 
             # get targets simple way
             '''
