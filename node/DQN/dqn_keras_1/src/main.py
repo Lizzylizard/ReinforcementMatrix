@@ -41,17 +41,17 @@ class Node:
     # increment if you wish to save a new version of the network model
     # or set to specific model version if you wish to use an existing
     # model
-    self.path_nr = 4
+    self.path_nr = 3
     # set to False if you wish to run program with existing model
-    self.learn = True
+    self.learn = False
 
     '''---------------------Hyperparameters------------------------'''
     # hyperparameters to experiment with
     # number of learning episodes
-    self.max_episodes = 1000
+    self.max_episodes = 750
     self.max_steps_per_episode = 500
     # speed of the robot's wheels
-    self.speed = 8.5
+    self.speed = 7.5
     # replay buffer capacity
     self.rb_capacity = 2000
     # number of examples that will be extracted at once from
@@ -455,22 +455,24 @@ class Node:
     print("last output y =\n\t" + str(output))
     print("last loss = " + str(loss))
 
-  # bellman equation for double q network
-  def bellman_with_tn(self, curr_Q, next_Q, action, reward):
-    expected_Q = np.zeros(shape=[len(curr_Q), 7])
+  # bellman equation
+  def bellman_with_tn(self, curr_Q, next_Q, action, reward, done):
+    expected_Q = np.copy(curr_Q)
     for i in range(len(curr_Q)):
       max_Q = np.max(next_Q[i])
       index = int(action[i])
-      # original:
-      # qstar(s, a) = Rt+1 + (1-alpha)*q(s, a) * gamma *maxqstar(s', a')
-      '''
-      expected_Q[i, index] = reward[i] + (1 - self.alpha) * \
-                     curr_Q[i, index] * self.gamma * max_Q
-       '''
       # like here:
       '''https://pylessons.com/CartPole-reinforcement-learning/'''
-      expected_Q[i, index] = reward[i] + self.gamma * max_Q
+      if(done[i]):
+        expected_Q[i, index] = reward[i]
+      else:
+        expected_Q[i, index] = reward[i] + self.gamma * max_Q
+      # in q-matrix it was:
+      #qstar(s, a) = Rt+1 + (1-alpha)*q(s, a) * gamma*maxqstar(s', a')
+      # expected_Q[i, index] = reward[i] + (1 - self.alpha) * \
+                    # curr_Q[i, index] * self.gamma * max_Q
     return expected_Q
+
 
   # get random (batch of) experiences and learn with it
   # use target network for optimal q-values
@@ -485,12 +487,14 @@ class Node:
                                       self.mini_batch_size * 50])
     mem_actions = np.zeros(shape=[len(memory_batch)])
     mem_rewards = np.zeros(shape=[len(memory_batch)])
+    mem_dones = np.zeros(shape=[len(memory_batch)])
 
     for i in range(len(memory_batch)):
       mem_states[i] = memory_batch[i].get("state")
       mem_last_states[i] = memory_batch[i].get("last_state")
       mem_actions[i] = memory_batch[i].get("action")
       mem_rewards[i] = memory_batch[i].get("reward")
+      mem_dones[i] = memory_batch[i].get("done")
 
     print("memory size = " + str(np.shape(mem_last_states)))
 
@@ -502,7 +506,7 @@ class Node:
     # use Bellman equation to compute target q-values
     expected_Qs = self.bellman_with_tn(curr_Q, next_Q,
                                             mem_actions,
-                                            mem_rewards)
+                                            mem_rewards, mem_dones)
 
     loss = self.policy_net.update_weights(state=mem_last_states, \
                                           targets=expected_Qs,
@@ -595,6 +599,7 @@ class Node:
   '''---------------Exploration exploitation trade off----------------'''
   # exponentially decay epsilon
   def decay_epsilon(self):
+    '''
     # new
     if (self.episode_counter > self.start_decaying):
       if self.epsilon > self.epsilon_min:
@@ -607,7 +612,6 @@ class Node:
       self.exploration_prob = self.min_exploration_rate + \
         (self.max_exploration_rate - self.min_exploration_rate) * \
         np.exp(-self.decay_rate * self.episode_counter)
-    '''
 
   # decide whether to explore or to exploit
   def epsilon_greedy(self, e):
@@ -754,38 +758,18 @@ class Node:
 
             # get state and reward
             self.curr_state, reward = self.get_robot_state(my_img)
+            done = False
+            if(self.curr_state == self.lost_line):
+              done = True
 
             # store experience
             self.memory.store_experience(state=my_imgs,
                                          last_state=self.last_imgs,
                                          action=self.curr_action,
-                                         reward=reward)
-
-            '''
-            # update target net at start of every 5th episode
-            if(self.episode_counter % self.update_r_targets == 0 and
-              self.steps_in_episode == 0):
-              self.target_net = self.policy_net.copy(self.target_net)
-              print("Updated target network")
-            '''
-            '''
-            # softly update target net EVERY step
-            self.target_net = self.policy_net.copy_softly(self.target_net)
-            '''
-
-            # get targets simple way
-            '''
-            self.targets = self.fill_targets(self.targets,
-                                             self.curr_action, reward)
-            '''
-
-            # get targets via target_network
-            # self.targets = self.target_net.use_network(
-              # state=self.last_imgs)
+                                         reward=reward, done=done)
 
             # use states from memory to update policy network in
             # order to not 'forget' previously learned things
-            # self.use_memory(self.targets)
             self.use_memory_with_tn()
 
             # begin a new episode if robot lost the line
@@ -801,18 +785,10 @@ class Node:
               # skip the next steps and start a new loop
               continue
 
-            #print("begin driving")
             # get the next action
             self.curr_action = self.get_next_action(my_imgs)
-            # wait for some images
-            #for i in range(2):
-             # self.get_image()
-            # stop robot in order to not miss any images
-            #self.stopRobot()
-            #print("end driving")
 
             # learn a second time
-            # self.use_memory(self.targets)
             self.use_memory_with_tn()
 
             # decay the probability of exploring

@@ -10,14 +10,14 @@ class Memory():
     self.experiences = [0.0] * self.memory_size
     self.count = 0
 
-  def make_tuple(self, state, last_state, action, reward):
+  def make_tuple(self, state, last_state, action, reward, done):
     tuple = {"state": state, "last_state": last_state,  "action":
-      action, "reward": reward}
+      action, "reward": reward, "done": done}
     return tuple
 
-  def store_experience(self, state, last_state, action, reward):
+  def store_experience(self, state, last_state, action, reward, done):
     experience_tuple = self.make_tuple(state, last_state, action,
-                                       reward)
+                                       reward, done)
     # cyclic storing until experiences are full for the first time
     if(self.count <= len(self.experiences)):
       i = self.count % self.memory_size
